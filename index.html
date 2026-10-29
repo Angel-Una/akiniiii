@@ -251,88 +251,108 @@ try {
   }, true);
 } catch (e) {}
 </script><meta content="no-cache, no-store, must-revalidate" http-equiv="Cache-Control"/><meta content="no-cache" http-equiv="Pragma"/><meta content="0" http-equiv="Expires"/><script>/* 版本标记已移除：清理历史 akini_ver 版本缓存，不再写入任何版本数据 */(function(){ try { localStorage.removeItem('akini_ver'); } catch(e){} })();</script><script id="akini-write-through">
-/* ===== 核心键写穿透镜像（根治背景图/头像/自定义文字等一切"回退旧数据"） =====
-   根因：这些键此前只写 localStorage 主键；恢复源（vault 60s 轮询 / IDB snap_ / LS 快照）
+/* ===== 核心键写穿透镜像（根治背景图/头像/自定义文字/头像互换等一切"回退旧数据"） =====
+   根因：这些键此前只写 localStorage 主键；恢复源（vault / IDB snap_ / LS 快照）
    躺的是旧值——崩溃丢键后回填旧值，用户就看到"设置回到旧数据"。
-   修复（对齐 极简标杆 数据只增不降）：
-   1. 白名单键每次 setItem 同步镜像 IDB snap_/snap2_ → 恢复源永远等于最新值；
-   2. removeItem 同步删镜像 → 已删除的背景/文字不会被恢复源复活；
-   3. 每次写/删登记 akini_key_mtime → 恢复侧守卫：快照比当前动作旧就绝不回填。 */
+   旧实现把 localStorage.setItem 装成实例自有属性，遮蔽了 Storage.prototype 拦截器，
+   导致 Storage.prototype.setItem.call(localStorage,...) 与 localStorage.setItem(...)
+   走两条路径，互换开关/自定义文字等出现"写了读不到"的设备特有故障。
+   修复（对齐 极简标杆 + syy 单路径原则）：
+   1. 直接包装 Storage.prototype.setItem/removeItem，不碰实例属性——所有写路径统一；
+   2. 白名单键每次写同步镜像到 IDB 主键 + snap_/snap2_ → restoreAll 能直接命中；
+   3. removeItem 同步删镜像 → 已删除的背景/文字不会被恢复源复活；
+   4. 每次写/删登记 akini_key_mtime → 恢复侧守卫：快照比当前动作旧就绝不回填。 */
 (function () {
   "use strict";
+  if (!window.Storage || !Storage.prototype.setItem) return;
   var CORE = {
     akini_home_bg: 1, akini_cover_bg: 1, akini_day_bg: 1, akini_music_bg: 1,
     akini_s1_cover: 1, akini_s1_photo: 1, akini_s1_avatar: 1, akini_s1_texts: 1,
     akini_s1_polaroid_note: 1,
     akini_my_avatar: 1, akini_ta_avatar: 1, akini_avatar_left: 1, akini_avatar_right: 1,
+    akini_icity_my_avatar: 1, akini_icity_ta_avatar: 1,
     akini_signature: 1, akini_bubble_color: 1, akini_day_label: 1, akini_start_date: 1,
-    akini_cal_custom_center: 1
+    akini_cal_custom_center: 1, akini_swap_avatar_pos: 1,
+    akini_my_name: 1, akini_ta_name: 1, akini_my_status: 1, akini_ta_status: 1,
+    akini_friends_signature: 1, akini_bubble_css: 1
   };
   function isCore(k) {
+    if (!k) return false;
     if (CORE[k]) return true;
-    if (k && k.indexOf("akini_s1_custom_text_") === 0) return true;
+    var ks = String(k);
+    if (ks.indexOf("akini_s1_custom_text_") === 0) return true;
     return false;
   }
-  var _origSet = localStorage.setItem.bind(localStorage);
-  var _origRemove = localStorage.removeItem.bind(localStorage);
-  var _origGet = localStorage.getItem.bind(localStorage);
+  /* 取当前原型方法（已被前面的配额兜底脚本包过一层），在其外再包一层写穿透 */
+  var prevSet = Storage.prototype.setItem;
+  var prevRm = Storage.prototype.removeItem;
   var _inPatch = false;
+  function rawGet(k) { try { return prevGet.call(window.localStorage, k); } catch (e) { return null; } }
+  var prevGet = Storage.prototype.getItem;
   function touchMtime(k) {
     try {
       var m = {};
-      try { m = JSON.parse(_origGet("akini_key_mtime") || "{}") || {}; } catch (e) { m = {}; }
+      try { m = JSON.parse(rawGet("akini_key_mtime") || "{}") || {}; } catch (e) { m = {}; }
       m[k] = Date.now();
       _inPatch = true;
-      try { _origSet("akini_key_mtime", JSON.stringify(m)); } finally { _inPatch = false; }
+      try { prevSet.call(window.localStorage, "akini_key_mtime", JSON.stringify(m)); } finally { _inPatch = false; }
     } catch (e2) {}
   }
-  localStorage.setItem = function (k, v) {
-    _origSet(k, v);
-    if (_inPatch || !isCore(k)) return;
-    touchMtime(k);
+  function mirrorToIdb(k, v) {
     try {
       var s = String(v);
       if (window._idbStore && window._idbStore.set) {
+        /* 主键：restoreAll 直接读这个；snap_/snap2_：快照/保险箱恢复源用 */
+        window._idbStore.set(k, s);
         window._idbStore.set("snap_" + k, s);
         window._idbStore.set("snap2_" + k, s);
       }
     } catch (e) {}
+  }
+  Storage.prototype.setItem = function (k, v) {
+    k = String(k); v = String(v);
+    var ret = prevSet.call(this, k, v);
+    if (_inPatch || !isCore(k)) return ret;
+    touchMtime(k);
+    mirrorToIdb(k, v);
+    return ret;
   };
-  localStorage.removeItem = function (k) {
-    _origRemove(k);
-    if (_inPatch || !isCore(k)) return;
+  Storage.prototype.removeItem = function (k) {
+    k = String(k);
+    var ret = prevRm.call(this, k);
+    if (_inPatch || !isCore(k)) return ret;
     touchMtime(k);
     try {
       if (window._idbStore && window._idbStore.remove) {
+        window._idbStore.remove(k);
         window._idbStore.remove("snap_" + k);
         window._idbStore.remove("snap2_" + k);
       }
     } catch (e) {}
+    return ret;
   };
+  /* 若实例属性残留（旧版写入），清掉让原型方法生效 */
+  try { delete localStorage.setItem; delete localStorage.removeItem; } catch (e) {}
   function mirrorAllCore() {
     try {
+      var seen = {};
       var keys = Object.keys(CORE);
       for (var i = 0; i < localStorage.length; i++) {
         var lk = localStorage.key(i);
         if (lk && isCore(lk)) keys.push(lk);
       }
       keys.forEach(function (k) {
+        if (seen[k]) return; seen[k] = 1;
         try {
-          var v = _origGet(k);
+          var v = rawGet(k);
           if (v == null || v === "" || v === "null" || v === "undefined") return;
-          if (window._idbStore && window._idbStore.set) {
-            window._idbStore.set("snap_" + k, String(v));
-            window._idbStore.set("snap2_" + k, String(v));
-          }
+          mirrorToIdb(k, v);
         } catch (e) {}
       });
     } catch (e) {}
   }
-  // 对齐 milk/syy：改用一次性 setTimeout，不再用高频轮询等待
   setTimeout(function () {
-    if (window._idbStore && window._idbStore.set) {
-      mirrorAllCore();
-    }
+    if (window._idbStore && window._idbStore.set) mirrorAllCore();
   }, 800);
   window.__akiniCoreWriteThrough = { isCore: isCore, touchMtime: touchMtime, mirrorAllCore: mirrorAllCore };
 })();
@@ -340,8 +360,8 @@ try {
 
 
 
-<link rel="apple-touch-icon" sizes="180x180" href="icon-180.png?v=20261105a"/>
-<link rel="apple-touch-icon" href="favicon.png?v=20261105a"/>
+<link rel="apple-touch-icon" sizes="180x180" href="icon-180.png?v=20261113a"/>
+<link rel="apple-touch-icon" href="favicon.png?v=20261113a"/>
 <!-- iOS "添加到主屏幕"独立窗口模式（缺这三个 meta 时 iOS 会按普通网页打开，且黑边/白屏） -->
 <meta name="apple-mobile-web-app-capable" content="yes"/>
 <meta name="mobile-web-app-capable" content="yes"/>
@@ -358,7 +378,7 @@ try {
 </script>
 <meta content="telephone=no" name="format-detection"/><meta content="no" name="wap-font-scale"/><meta content="no" name="wap-font-scale-size"/><script>document.addEventListener("gesturestart",function(e){e.preventDefault()});document.addEventListener("gesturechange",function(e){e.preventDefault()});document.addEventListener("gestureend",function(e){e.preventDefault()});document.addEventListener("dblclick",function(e){e.preventDefault()},{passive:false});</script><script>(function(){try{var t=window.localStorage;try{t.removeItem("__aktest__");}catch(_e0){}t.setItem("__aktest__","1");t.removeItem("__aktest__");}catch(e){var _n=e&&(e.name||"");var _c=(e&&typeof e.code==="number")?e.code:-1;var _quota=(_n==="QuotaExceededError"||_n==="NS_ERROR_DOM_STORAGE_QUOTA_REACHED"||_n==="QuotaExceeded"||_c===22||_c===1014);if(_quota){try{window.localStorage.removeItem("__aktest__");}catch(_e1){}console.warn("[Akini] localStorage 配额已满：保留原生存储，旧数据仍可读写");return;}var s={};try{Object.defineProperty(window,"localStorage",{value:{getItem:function(k){return s[k]||null;},setItem:function(k,v){s[k]=String(v);},removeItem:function(k){delete s[k];},clear:function(){s={};},key:function(i){return Object.keys(s)[i]||null;},get length(){return Object.keys(s).length;}},writable:true,configurable:true});window.__akiniLocalStorageBlocked=true;}catch(_e2){window.__akiniLocalStorageBlocked=true;}console.warn("[Akini] localStorage 不可用，已启用内存模式（数据不会持久化）");}})();</script><script>/* 启动清理：合并备份链产生的 _backup_backup... 冗余键（好友设备 5.2MB/1397 键，卡顿根因之一），只保留单个 _backup */(function(){try{var removed=0;for(var i=localStorage.length-1;i>=0;i--){var k=localStorage.key(i);if(k&&/_backup(_backup)+$/.test(k)){localStorage.removeItem(k);removed++;}}if(removed)console.log("[Akini] 清理冗余备份键:",removed);}catch(e){}})();</script>
 <script>(function(){window.__akiniFormatDateTime=function(s){try{if(!s){return '';}var d;if(/^-?\d+/.test(String(s).trim())){d=new Date(Number(String(s).trim()));}else{d=new Date(s);}if(isNaN(d.getTime())){return '';}var now=new Date();var h=Math.floor((now-d)/3600000);if(h<1){var m=Math.floor((now-d)/60000);if(m<1){m=1;}return m+'分钟前';}if(h<24){return h+'小时前';}if(h<48){return '昨天';}var Y=d.getFullYear(),M=d.getMonth()+1,D=d.getDate();function p(n){return n<10?'0'+n:''+n;}return Y+'-'+p(M)+'-'+p(D);}catch(e){return '';}};})();</script>
-<meta content="#000000" name="theme-color"/><link href="favicon-96.png?v=20261105a" rel="icon" sizes="96x96" type="image/png"/><link href="icon-192.png?v=20261105a" rel="icon" sizes="192x192" type="image/png"/><title>Akini</title><link href="manifest.json?v=20261105a" rel="manifest"/><link href="css/akini-style.css?v=20261112a" id="akini-style" rel="stylesheet"/><link href="css/akini-perf-lite.css?v=20261105b" rel="stylesheet"/>
+<meta content="#000000" name="theme-color"/><link href="favicon-96.png?v=20261113a" rel="icon" sizes="96x96" type="image/png"/><link href="icon-192.png?v=20261113a" rel="icon" sizes="192x192" type="image/png"/><title>Akini</title><link href="manifest.json?v=20261113a" rel="manifest"/><link href="css/akini-style.css?v=20261113a" id="akini-style" rel="stylesheet"/><link href="css/akini-perf-lite.css?v=20261113a" rel="stylesheet"/>
 
 
 
@@ -539,7 +559,7 @@ html body #app-chat .chat-body .msg-row.system.msg-row.system .bubble:not(.trans
 }
 </style>
 
-<script src="js/akini-screen1.js?v=20261105c"></script>
+<script src="js/akini-screen1.js?v=20261113a"></script>
 
 
 <!-- 清理：triggerDayBgUpload/handleDirectDayBgUpload 已合并至 akini-toast.js，底图恢复由 akini-image-upload.js 统一负责 -->
@@ -653,7 +673,7 @@ window.changeS1Photo = function() {
 </script>
 
 
-<script src="js/akini-calendar-menu.js?v=20261105a"></script>
+<script src="js/akini-calendar-menu.js?v=20261113a"></script>
 
 
 <!-- default bgs cleaner removed to preserve user custom backgrounds -->
@@ -1310,7 +1330,7 @@ window.AKINI_VERSION = "";
   display: block !important;
 }
 </style>
-<script src="js/akini-navigation.js?v=20261105h"></script>
+<script src="js/akini-navigation.js?v=20261113a"></script>
 <div class="call-mini-window" id="callMiniWindow"><div class="call-avatar" id="callAvatar"><img src="data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%20viewBox%3D%220%200%2080%2080%22%3E%3Crect%20width%3D%2280%22%20height%3D%2280%22%20fill%3D%22%23f7f8fa%22/%3E%3Ccircle%20cx%3D%2240%22%20cy%3D%2229%22%20r%3D%2214%22%20fill%3D%22none%22%20stroke%3D%22%235a5e66%22%20stroke-width%3D%221.5%22/%3E%3Cpath%20d%3D%22M12%2076c4-17%2014-26%2028-26s24%209%2028%2026%22%20fill%3D%22none%22%20stroke%3D%22%235a5e66%22%20stroke-width%3D%221.5%22%20stroke-linecap%3D%22round%22/%3E%3C/svg%3E" style="width:100%;height:100%;object-fit:cover;border-radius:50%;"></div><div class="call-name" id="callName">哥哥</div><div class="call-status" id="callStatus">来电中...</div><div class="call-time" id="callTimeDisplay">00:00</div><div class="call-actions"><button class="minimize-btn" id="callMinimizeBtn" type="button"><svg fill="none" stroke="currentColor" stroke-linecap="round" stroke-width="2.4" height="18" viewBox="0 0 24 24" width="18"><path d="M5 12h14"/></svg></button> <button class="answer-btn" id="callAnswerBtn" type="button"><svg fill="currentColor" height="28" viewbox="0 0 24 24" width="28"><path d="M20.01 15.38c-1.23 0-2.42-.2-3.53-.56-.35-.12-.74-.03-1.01.24l-1.57 1.97c-2.83-1.35-5.48-3.9-6.89-6.83l1.95-1.66c.27-.28.35-.67.24-1.02-.37-1.11-.56-2.3-.56-3.53 0-.54-.45-.99-.99-.99H4.19C3.65 3 3 3.24 3 3.99 3 13.28 10.73 21 20.01 21c.71 0 .99-.63.99-1.18v-3.45c0-.54-.45-.99-.99-.99z"></path></svg></button> <button class="hangup-btn" id="callHangupBtn" type="button"><svg fill="currentColor" height="28" style="transform:rotate(135deg)" viewbox="0 0 24 24" width="28"><path d="M20.01 15.38c-1.23 0-2.42-.2-3.53-.56-.35-.12-.74-.03-1.01.24l-1.57 1.97c-2.83-1.35-5.48-3.9-6.89-6.83l1.95-1.66c.27-.28.35-.67.24-1.02-.37-1.11-.56-2.3-.56-3.53 0-.54-.45-.99-.99-.99H4.19C3.65 3 3 3.24 3 3.99 3 13.28 10.73 21 20.01 21c.71 0 .99-.63.99-1.18v-3.45c0-.54-.45-.99-.99-.99z"></path></svg></button></div></div><div class="phone-frame" id="phoneFrame"><div class="bg-wave" id="bgWave"></div>
 <div class="content-wrapper" id="homeScreens">
   <div class="home-slider" id="homeSlider">
@@ -1922,7 +1942,7 @@ window.AKINI_VERSION = "";
 </div>
 </div>
 </div>
-<script src="js/akini-shop.js?v=20261105b"></script>
+<script src="js/akini-shop.js?v=20261113a"></script>
 <div class="call-fullscreen" id="app-call" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:linear-gradient(180deg,#34373f 0%,#20222a 55%,#17181d 100%);z-index:6400;flex-direction:column;align-items:center;color:#fff;overflow:hidden;box-sizing:border-box;padding:calc(56px + var(--ak-sat, 0px)) 24px calc(52px + env(safe-area-inset-bottom,0px))"><button id="callInviteBtn" style="position:absolute;top:calc(14px + var(--ak-sat, 0px));right:16px;width:38px;height:38px;border-radius:50%;border:1px solid rgba(255,255,255,.22);background:rgba(255,255,255,.1);color:#fff;font-size:22px;line-height:1;display:none;align-items:center;justify-content:center;cursor:pointer;z-index:10" type="button">+</button><div id="callAvatarStack" style="order:0;display:flex;align-items:center;justify-content:center;gap:14px;flex-wrap:wrap;max-width:280px;margin-top:24px"><div class="call-avatar" id="callAvatarFull" style="width:96px;height:96px;border-radius:50%;background:#f0f2f5;display:flex;align-items:center;justify-content:center;font-size:48px;border:3px solid rgba(255,255,255,.14);box-shadow:0 10px 34px rgba(0,0,0,.4);overflow:hidden"><img src="data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%20viewBox%3D%220%200%2080%2080%22%3E%3Crect%20width%3D%2280%22%20height%3D%2280%22%20fill%3D%22%23f0f2f5%22/%3E%3Ccircle%20cx%3D%2240%22%20cy%3D%2230%22%20r%3D%2213%22%20fill%3D%22none%22%20stroke%3D%22%23686e7a%22%20stroke-width%3D%222%22/%3E%3Cpath%20d%3D%22M14%2074c3.5-17%2014-25%2026-25s22.5%208%2026%2025%22%20fill%3D%22none%22%20stroke%3D%22%23686e7a%22%20stroke-width%3D%222%22%20stroke-linecap%3D%22round%22/%3E%3C/svg%3E" style="width:100%;height:100%;object-fit:cover;border-radius:50%;"></div></div><div class="call-name" id="callNameFull" style="order:1;color:#fff;font-size:21px;font-weight:600;margin-top:20px;letter-spacing:.5px">哥哥</div><div class="call-status" id="callStatusFull" style="order:2;color:rgba(255,255,255,.55);font-size:14px;font-weight:400;margin-top:8px;letter-spacing:.5px">正在呼叫…</div><div id="callMemberStatus" style="order:3;color:rgba(255,255,255,.4);font-size:12px;margin-top:10px;min-height:18px;text-align:center;padding:0 20px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;width:100%;box-sizing:border-box"></div><div class="call-time" id="callTimeDisplayFull" style="order:4;color:rgba(255,255,255,.75);font-size:15px;margin-top:18px;display:none;letter-spacing:1.5px;font-variant-numeric:tabular-nums">00:00</div><div class="call-actions" style="order:5;margin-top:auto;display:flex;gap:0;align-items:flex-end;justify-content:space-around;width:100%;max-width:300px"><div id="callMinimizeBtnFullWrap" style="display:none;flex-direction:column;align-items:center;gap:8px;flex:1"><button class="minimize-btn" id="callMinimizeBtnFull" onclick="var ac=document.getElementById('app-call');if(ac)ac.style.display='none';return false;" style="background:rgba(255,255,255,.13);color:#fff;width:62px;height:62px;border:none;border-radius:50%;cursor:pointer;display:flex;justify-content:center;align-items:center;box-shadow:0 6px 22px rgba(0,0,0,.25)" type="button"><svg fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" height="26" viewbox="0 0 24 24" width="26"><path d="M5 12h14"></path></svg></button><span style="font-size:12px;color:rgba(255,255,255,.5)">最小化</span></div><div style="display:flex;flex-direction:column;align-items:center;gap:8px;flex:1"><button class="answer-btn" id="callAnswerBtnFull" style="background:#2dd36f;color:#fff;width:62px;height:62px;border:none;border-radius:50%;cursor:pointer;display:flex;justify-content:center;align-items:center;box-shadow:0 6px 22px rgba(45,211,111,.4)" type="button"><svg fill="currentColor" height="28" viewbox="0 0 24 24" width="28"><path d="M20.01 15.38c-1.23 0-2.42-.2-3.53-.56-.35-.12-.74-.03-1.01.24l-1.57 1.97c-2.83-1.35-5.48-3.9-6.89-6.83l1.95-1.66c.27-.28.35-.67.24-1.02-.37-1.11-.56-2.3-.56-3.53 0-.54-.45-.99-.99-.99H4.19C3.65 3 3 3.24 3 3.99 3 13.28 10.73 21 20.01 21c.71 0 .99-.63.99-1.18v-3.45c0-.54-.45-.99-.99-.99z"></path></svg></button><span style="font-size:12px;color:rgba(255,255,255,.5)">接通</span></div><div style="display:flex;flex-direction:column;align-items:center;gap:8px;flex:1"><button class="hangup-btn" id="callHangupBtnFull" onclick="if(window.__akiniForceHangup){window.__akiniForceHangup();}else{var ac=document.getElementById('app-call');if(ac)ac.style.display='none';var m=document.getElementById('callMiniWindow');if(m)m.style.display='none';}return false;" style="background:#fa5151;color:#fff;width:62px;height:62px;border:none;border-radius:50%;cursor:pointer;display:flex;justify-content:center;align-items:center;box-shadow:0 6px 22px rgba(250,81,81,.4)" type="button"><svg fill="currentColor" height="28" style="transform:rotate(135deg)" viewbox="0 0 24 24" width="28"><path d="M20.01 15.38c-1.23 0-2.42-.2-3.53-.56-.35-.12-.74-.03-1.01.24l-1.57 1.97c-2.83-1.35-5.48-3.9-6.89-6.83l1.95-1.66c.27-.28.35-.67.24-1.02-.37-1.11-.56-2.3-.56-3.53 0-.54-.45-.99-.99-.99H4.19C3.65 3 3 3.24 3 3.99 3 13.28 10.73 21 20.01 21c.71 0 .99-.63.99-1.18v-3.45c0-.54-.45-.99-.99-.99z"></path></svg></button><span style="font-size:12px;color:rgba(255,255,255,.5)">挂断</span></div></div></div><div id="musicOptionPicker" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,.55);z-index:6000;align-items:center;justify-content:center"><div style="background:#2a2a30;border-radius:20px;width:min(340px,90%);max-height:70vh;display:flex;flex-direction:column;overflow:hidden;box-shadow:0 20px 60px rgba(0,0,0,.35)"><div style="padding:18px 20px;border-bottom:1px solid rgba(255,255,255,.08);display:flex;align-items:center;justify-content:space-between"><span style="font-size:17px;font-weight:600">听歌选项</span> <button id="musicOptionPickerClose" style="background:0 0;border:none;font-size:20px;color:rgba(255,255,255,.5);cursor:pointer" type="button">✕</button></div><div id="musicOptionList" style="overflow-y:auto;padding:10px 0;flex:1"><div class="music-option-item" data-option="daily" style="padding:14px 20px;border-bottom:1px solid rgba(255,255,255,.06);cursor:pointer"><div style="font-size:15px;font-weight:600;color:#fff">每日推荐</div><div style="font-size:12px;color:rgba(255,255,255,.45);margin-top:2px">从歌单随机播放</div></div><div class="music-option-item" data-option="liked" style="padding:14px 20px;border-bottom:1px solid rgba(255,255,255,.06);cursor:pointer"><div style="font-size:15px;font-weight:600;color:#fff">我喜欢的音乐</div><div style="font-size:12px;color:rgba(255,255,255,.45);margin-top:2px">优先播放收藏歌曲</div></div><div class="music-option-item" data-option="chill" style="padding:14px 20px;border-bottom:1px solid rgba(255,255,255,.06);cursor:pointer"><div style="font-size:15px;font-weight:600;color:#fff">轻音乐/放松</div><div style="font-size:12px;color:rgba(255,255,255,.45);margin-top:2px">适合专注或休息</div></div><div class="music-option-item" data-option="hot" style="padding:14px 20px;border-bottom:1px solid rgba(255,255,255,.06);cursor:pointer"><div style="font-size:15px;font-weight:600;color:#fff">热歌榜</div><div style="font-size:12px;color:rgba(255,255,255,.45);margin-top:2px">播放热门歌曲</div></div></div></div></div>
 <div id="surveyListModal" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:#f5f5f5;z-index:6001;flex-direction:column">
 <div style="display:flex;align-items:center;justify-content:space-between;padding:14px 16px;background:#fff;border-bottom:1px solid #e8e8e8;flex-shrink:0">
@@ -2072,7 +2092,7 @@ window.AKINI_VERSION = "";
     }catch(e){}
   }, 5000);
 })();
-</script><script src="js/akini-vendor.js?v=20261105a"></script><script src="js/akini-storage.js?v=20261112a"></script><script src="js/akini-persist.js?v=20261111a"></script><script>/* 时序桩：main.js 启动渲染可能先于内联头像助手定义，先占位避免 ReferenceError 中断启动链；真正的实现紧随其后会覆盖它 */window.__akiniAvOrLine=window.__akiniAvOrLine||function(v){var s=String(v==null?"":v).trim();return s?s:"data:image/svg+xml;charset=utf-8,"+encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80"><rect width="80" height="80" fill="#f7f8fa"/><circle cx="40" cy="29" r="14" fill="none" stroke="#5a5e66" stroke-width="1.5"/><path d="M12 76c4-17 14-26 28-26s24 9 28 26" fill="none" stroke="#5a5e66" stroke-width="1.5" stroke-linecap="round"/></svg>');};</script>
+</script><script src="js/akini-vendor.js?v=20261113a"></script><script src="js/akini-storage.js?v=20261113a"></script><script src="js/akini-persist.js?v=20261113a"></script><script>/* 时序桩：main.js 启动渲染可能先于内联头像助手定义，先占位避免 ReferenceError 中断启动链；真正的实现紧随其后会覆盖它 */window.__akiniAvOrLine=window.__akiniAvOrLine||function(v){var s=String(v==null?"":v).trim();return s?s:"data:image/svg+xml;charset=utf-8,"+encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80"><rect width="80" height="80" fill="#f7f8fa"/><circle cx="40" cy="29" r="14" fill="none" stroke="#5a5e66" stroke-width="1.5"/><path d="M12 76c4-17 14-26 28-26s24 9 28 26" fill="none" stroke="#5a5e66" stroke-width="1.5" stroke-linecap="round"/></svg>');};</script>
 
 <!-- ===== zzw：陪伴页 ===== -->
 <div id="app-companion" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;z-index:500;flex-direction:column;background:#f7f7f7;color:#1a1a1a">
@@ -2201,7 +2221,7 @@ window.AKINI_VERSION = "";
 </div>
 </div>
 <input accept="image/*" class="akini-file-offscreen" id="novelCoverInput" type="file"/>
-<script src="js/akini-core.js?v=20261112a"></script><script src="js/akini-app.js?v=20261112a"></script>
+<script src="js/akini-core.js?v=20261113a"></script><script src="js/akini-app.js?v=20261113a"></script>
 
 <script>
 // 播放列表浮层：兜底保障，确保原浮层内歌曲能渲染
@@ -2254,7 +2274,7 @@ window.AKINI_VERSION = "";
 })();
 </script>
 
-<script src="js/akini-contacts-tools.js?v=20261105a"></script>
+<script src="js/akini-contacts-tools.js?v=20261113a"></script>
 <script>
 /* ============ 进入聊天界面时表情包面板必须默认关闭（防自动弹出） ============ */
 (function(){
@@ -2279,7 +2299,7 @@ window.AKINI_VERSION = "";
     });
   }catch(e){}
 })();
-</script><script src="js/akini-theme.js?v=20261112a"></script>
+</script><script src="js/akini-theme.js?v=20261113a"></script>
 <script>
 // Load actual images into slider previews
 (function(){
@@ -2438,7 +2458,7 @@ function akiniCheckScrollText(){
 // 网易云 API 代理（歌单导入/一起听/扫码登录使用）
 window.AKINI_NETEASE_PROXY="https://api.mc666.org.cn";
 </script>
-<script src="js/akini-survey-feature.js?v=20261105b" id="akini-survey-feature" defer></script>
+<script src="js/akini-survey-feature.js?v=20261113a" id="akini-survey-feature" defer></script>
 
 <script>
 /* ===== 商店图标：已改用透明 SVG，无需处理白底 ===== */
@@ -2590,7 +2610,7 @@ window.__akiniRegisterSW = function(){
 /* 开机守卫已注销一切存量 SW；此处不再注册新 SW，也不再延迟触发任何注册 */
 </script>
 
-<script defer src="js/jszip.min.js?v=20261105a"></script>
+<script defer src="js/jszip.min.js?v=20261113a"></script>
 <script>
 // 兼容旧版 JSON 备份的轻量兜底：如果 core 风格备份引擎未加载，仍允许导出基础 JSON
 (function(){
@@ -2808,7 +2828,7 @@ window.__akiniRegisterSW = function(){
      core M() 优先取联系人头像、过滤默认 token。这里不再覆盖，避免只查 2 个键导致头像卡在旧值/默认值。 */
 })();
 </script>
-<script src="js/akini-icity-helper.js?v=20261105a"></script>
+<script src="js/akini-icity-helper.js?v=20261113a"></script>
 </div>
 <script>
 (function(){
@@ -3493,7 +3513,7 @@ window.markMailAsRead = function(mailId) {
 <!-- 清理：纪念日换图保险层已合并至 akini-toast.js -->
 
 
-<script src="js/akini-toast.js?v=20261105a" id="akini-toast"></script>
+<script src="js/akini-toast.js?v=20261113a" id="akini-toast"></script>
 <script id="akini-callbg">
 /* ===== 通话背景 / 通话mini背景 换图终端保险 =====
    实锤：美化页 inline onchange 调用的 handleBeautifyCallBg / handleBeautifyCallMiniBg
@@ -3620,7 +3640,7 @@ window.markMailAsRead = function(mailId) {
 </script>
 
 
-<script src="js/akini-restore.js?v=20261105a"></script>
+<script src="js/akini-restore.js?v=20261113a"></script>
 
 
 <script id="akini-music-menu-scroll-lock">
@@ -3736,9 +3756,9 @@ window.markMailAsRead = function(mailId) {
 </script>
 
 
-<script src="js/akini-runtime.js?v=20261105c"></script>
-<script src="js/akini-r6.js?v=20261112a"></script>
-<script src="js/akini-chat-engine.js?v=20261105a"></script>
+<script src="js/akini-runtime.js?v=20261113a"></script>
+<script src="js/akini-r6.js?v=20261113a"></script>
+<script src="js/akini-chat-engine.js?v=20261113a"></script>
 
 
 
