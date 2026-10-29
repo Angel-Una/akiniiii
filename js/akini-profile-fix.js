@@ -78,3 +78,84 @@
   });
   window.addEventListener('pagehide', function () { clearTimeout(timer); save(); });
 })();
+
+/* ===== 单人情侣模式硬约束 =====
+   需求：全站只保留一个 TA。微信点进去直接是与 TA 的聊天，不再出现通讯录/添加联系人/
+   多人会话等旧入口；历史残留的多余联系人连同其专属数据一并清除。 */
+(function () {
+  'use strict';
+  if (window.__akiniSingleModeReady) return;
+  window.__akiniSingleModeReady = true;
+
+  /* 被移除联系人名下的按联系人数据键前缀 */
+  var PER_CONTACT_PREFIXES = [
+    'akini_chat_history_', 'akini_contact_avatar_', 'akini_icity_profile_',
+    'akini_icity_ta_bg_', 'akini_chat_bg_', 'akini_surveys_', 'akini_sticker_groups_'
+  ];
+
+  function purgeContactData(cid) {
+    PER_CONTACT_PREFIXES.forEach(function (p) {
+      var k = p + cid;
+      try { window.__akiniWiping = true; } catch (e0) {}
+      try { localStorage.removeItem(k); } catch (e1) {}
+      try { localStorage.removeItem(k + '_backup'); } catch (e2) {}
+      try { if (window._idbStore && window._idbStore.remove) { window._idbStore.remove(k); window._idbStore.remove(k + '_backup'); } } catch (e3) {}
+      try { if (window.akiniStore && window.akiniStore.memoryRemove) window.akiniStore.memoryRemove(k); } catch (e4) {}
+      try { window.__akiniWiping = false; } catch (e5) {}
+    });
+  }
+
+  function enforceSingleContact() {
+    try {
+      var api = window.akiniContacts;
+      if (!api || !api.getContacts) return;
+      var list = api.getContacts() || [];
+      if (!Array.isArray(list) || !list.length) return;
+      var keep = list.filter(function (c) { return c && c.isDefault; })[0] || list[0];
+      if (!keep || !keep.id) return;
+      if (list.length > 1) {
+        list.forEach(function (c) {
+          if (c && c.id && String(c.id) !== String(keep.id)) purgeContactData(c.id);
+        });
+        var single = JSON.stringify([keep]);
+        try { localStorage.setItem('akini_contacts', single); } catch (e1) {}
+        try { if (window.akiniStore && window.akiniStore.memorySet) window.akiniStore.memorySet('akini_contacts', single); } catch (e2) {}
+        try { if (window._idbStore && window._idbStore.set) window._idbStore.set('akini_contacts', single); } catch (e3) {}
+        try { console.warn('[单人模式] 已收敛多余联系人 ' + (list.length - 1) + ' 个，只保留 ' + keep.id); } catch (e4) {}
+      }
+      /* 活动会话锁定到唯一 TA */
+      try {
+        if (String(localStorage.getItem('akini_active_chat_id') || '') !== String(keep.id)) {
+          localStorage.setItem('akini_active_chat_id', keep.id);
+        }
+      } catch (e5) {}
+      try { if (window._renderIcity) window._renderIcity(); } catch (e6) {}
+      try { if (window.__akiniRefreshChatListBadges) window.__akiniRefreshChatListBadges(); } catch (e7) {}
+    } catch (e) {}
+  }
+
+  /* 关闭所有多人入口：通讯录面板、添加联系人页、会话列表里的「添加联系人」菜单项 */
+  function hideMultiEntries() {
+    try {
+      var ct = document.getElementById('contactsTabPanel');
+      if (ct) ct.style.display = 'none';
+      var ac = document.getElementById('app-add-contact');
+      if (ac) ac.style.display = 'none';
+      var qt = document.getElementById('app-chat-list');
+      if (qt) qt.querySelectorAll('.chat-list-add-menu-item[data-action="add-contact"]').forEach(function (el) { el.style.display = 'none'; });
+      document.querySelectorAll('.chat-list-tab[data-tab="contacts"]').forEach(function (el) { el.style.display = 'none'; });
+    } catch (e) {}
+  }
+
+  function boot() {
+    enforceSingleContact();
+    hideMultiEntries();
+  }
+
+  boot();
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot);
+  ['akini-storage-restored', 'load', 'pageshow'].forEach(function (evt) {
+    window.addEventListener(evt, boot);
+  });
+  [800, 2000, 4500].forEach(function (ms) { setTimeout(boot, ms); });
+})();
