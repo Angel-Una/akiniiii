@@ -14,7 +14,7 @@
   }
 
 /* 全站图层清单：导航/返回共用同一份 */
-var AKINI_APP_PAGES = ["app-chat","app-chat-list","app-friends","app-mail","app-music","app-call","app-add-contact","app-contact-detail","app-shop","app-novel","app-novel-reader","app-companion"];
+var AKINI_APP_PAGES = ["app-chat","app-chat-list","app-friends","app-mail","app-music","app-call","app-shop","app-novel","app-novel-reader","app-companion"];
 var AKINI_AREAS = ["settingsArea","akiniProbArea","beautifyArea","icityArea","storageArea","wordbankOverlay","wbExclOverlay","surveyListModal","surveyCreateModal","surveyDetailModal","surveyCreatedListModal","akini-ta-phone-container","watchArea"];
 var AKINI_OVERLAYS = ["musicMenuOverlay","musicContactPicker","musicPlaylistOverlay","musicPlaylistSelect","musicOptionPicker","musicHomeOverlay","musicHistoryOverlay","musicEndPopup","musicInvitePopup","companionHomeOverlay","companionHistoryOverlay"];
 var AKINI_HOME_BARS = ["homeScreens","bottomBar"];
@@ -48,9 +48,6 @@ window.akiniGoBack = function(target){
   if (target !== "chat" && target !== "chat-list") {
     try { localStorage.removeItem("akini_active_chat_id"); } catch(e){}
   }
-  /* 记录当前是否在添加联系人/创建群聊页面，用于返回 chat-list 时切到通讯录 tab */
-  var sourcePage = null;
-  for (var k=0;k<AKINI_APP_PAGES.length;k++){ var src=document.getElementById(AKINI_APP_PAGES[k]); if(src && src.style.display!=="none" && src.classList.contains("show")){ sourcePage = AKINI_APP_PAGES[k].replace("app-",""); break; } }
   akiniHideLayers({ hideHome: true });
   if(window.__akiniBackStack) window.__akiniBackStack.length = 0;
   if (target) {
@@ -58,7 +55,7 @@ window.akiniGoBack = function(target){
     var el = document.getElementById("app-" + target);
     if (el) { el.style.display="flex"; el.classList.add("show"); el.style.zIndex="500"; }
     if (target === "chat-list" && window.switchChatTab) {
-      try { window.switchChatTab(sourcePage === "contact-detail" || sourcePage === "add-contact" ? "contacts" : "wechat"); } catch(e){}
+      try { window.switchChatTab("wechat"); } catch(e){}
     }
   }
   return false;
@@ -186,7 +183,7 @@ if (window.__navBack) { window.__navBack._akini = true; }
         __akiniShowAppContainer(app);
         return;
       }
-      if(app === "call" || app === "add-contact" || app === "contact-detail"){
+      if(app === "call"){
         __akiniShowAppContainer(app);
         return;
       }

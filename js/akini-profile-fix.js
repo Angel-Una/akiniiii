@@ -134,22 +134,8 @@
     } catch (e) {}
   }
 
-  /* 关闭所有多人入口：通讯录面板、添加联系人页、会话列表里的「添加联系人」菜单项 */
-  function hideMultiEntries() {
-    try {
-      var ct = document.getElementById('contactsTabPanel');
-      if (ct) ct.style.display = 'none';
-      var ac = document.getElementById('app-add-contact');
-      if (ac) ac.style.display = 'none';
-      var qt = document.getElementById('app-chat-list');
-      if (qt) qt.querySelectorAll('.chat-list-add-menu-item[data-action="add-contact"]').forEach(function (el) { el.style.display = 'none'; });
-      document.querySelectorAll('.chat-list-tab[data-tab="contacts"]').forEach(function (el) { el.style.display = 'none'; });
-    } catch (e) {}
-  }
-
   function boot() {
     enforceSingleContact();
-    hideMultiEntries();
   }
 
   boot();
