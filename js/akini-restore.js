@@ -80,24 +80,59 @@
     fromLocalforage();
   }
 
+  /* 从「内存缓存 → IndexedDB 镜像(memory) → localStorage」三处按优先级取图片值。
+     配额满时图片只存在于 IndexedDB，同步读 LS 是空的，必须逐层兜底。 */
+  function pickImg(k) {
+    try {
+      if (window.__akiniImgCache && typeof window.__akiniImgCache[k] === 'string' && window.__akiniImgCache[k].length > 10) return window.__akiniImgCache[k];
+    } catch(e) {}
+    try {
+      if (window.akiniStore && window.akiniStore.memoryGet) {
+        var m = window.akiniStore.memoryGet(k);
+        if (m && String(m).length > 10) return m;
+      }
+    } catch(e) {}
+    try { var v = localStorage.getItem(k); if (v && v.length > 10) return v; } catch(e) {}
+    return '';
+  }
+
+  /* 补齐首页/照片墙/头像等所有可自定义图片位的恢复：
+     原实现只恢复 home_bg + s1_avatar + 左右头像，其余图片位在配额满时只存在于 IDB，
+     刷新后会一直显示默认图（看起来像"数据消失"）。 */
+  function restoreMiscSlots() {
+    try {
+      var photo = pickImg('akini_s1_photo');
+      var elPhoto = document.getElementById('s1PolaroidImg');
+      if (photo && elPhoto && elPhoto.getAttribute('data-applied-src') !== photo) {
+        /* 撕拉片内芯是 div，图片以 background-image 呈现（与 changeS1Photo 保持一致） */
+        elPhoto.setAttribute('data-applied-src', photo);
+        elPhoto.style.backgroundImage = 'url("' + photo + '")';
+        elPhoto.style.backgroundSize = 'cover';
+        elPhoto.style.backgroundPosition = 'center';
+      }
+      var avL = pickImg('akini_avatar_left') || pickImg('akini_s2_avatar_left') || pickImg('akini_my_avatar') || pickImg('akini_s1_avatar');
+      if (avL) __akiniApplyAvatar('avatarLeft', avL);
+      var avR = pickImg('akini_avatar_right') || pickImg('akini_s2_avatar_right') || pickImg('akini_ta_avatar');
+      if (avR) __akiniApplyAvatar('avatarRight', avR);
+      /* 中间大头像是 div（s1AvatarCircle），换图后内部 img 不再带 id，必须作用在容器上 */
+      var s1Av = pickImg('akini_s1_avatar') || pickImg('akini_my_avatar');
+      if (s1Av) __akiniApplyAvatar('s1AvatarCircle', s1Av);
+    } catch(e) {}
+    /* 聊天/音乐/icity 等背景由 core 的 applyBg 统一处理，这里在数据恢复后再触发一次 */
+    try { if (typeof applyBg === 'function') applyBg(); } catch(e) {}
+    /* 自定义文字：配额恢复后重新渲染，避免刷新后只剩默认文案 */
+    try { if (window.__akiniRenderUserText) window.__akiniRenderUserText(); } catch(e) {}
+    /* 头像互换的内联定位在重渲染后需要重新应用 */
+    try { if (window.__akiniApplyAvatarSwap) window.__akiniApplyAvatarSwap(); } catch(e) {}
+  }
+
   function restoreAllImagesAndConfig() {
     try {
-      var homeBg = localStorage.getItem('akini_home_bg') || localStorage.getItem('home_bg');
+      var homeBg = pickImg('akini_home_bg') || pickImg('home_bg');
       applyHomeBg(homeBg);
       restoreHomeBgAsync();
-      var s1Av = localStorage.getItem('akini_s1_avatar') || localStorage.getItem('akini_my_avatar') || localStorage.getItem('akini_avatar_left');
-      if (s1Av && s1Av.length > 10) {
-        var elS1Av = document.getElementById('s1AvatarImg');
-        if (elS1Av && elS1Av.getAttribute('data-applied-src') !== s1Av) {
-          elS1Av.setAttribute('data-applied-src', s1Av);
-          elS1Av.src = s1Av;
-        }
-      }
-      var avL = localStorage.getItem('akini_avatar_left') || localStorage.getItem('akini_s2_avatar_left') || localStorage.getItem('akini_my_avatar') || localStorage.getItem('akini_s1_avatar');
-      if (avL && avL.length > 10) __akiniApplyAvatar('avatarLeft', avL);
-      var avR = localStorage.getItem('akini_avatar_right') || localStorage.getItem('akini_s2_avatar_right') || localStorage.getItem('akini_ta_avatar');
-      if (avR && avR.length > 10) __akiniApplyAvatar('avatarRight', avR);
     } catch(e) {}
+    restoreMiscSlots();
   }
 
   function scheduleRestore() {
@@ -114,6 +149,9 @@
   window.addEventListener('load', restoreAllImagesAndConfig);
   /* 图片键从 IndexedDB 回填完成后（可能晚于首屏），再补一次壁纸/头像恢复 */
   window.addEventListener('akini-img-ready', function(){ try { restoreAllImagesAndConfig(); } catch(e) {} });
+  /* 存储层对账完成后再补一轮（IDB → LS 回填发生在首屏之后，晚到的数据必须重新上屏） */
+  window.addEventListener('akini-storage-restored', function(){ try { restoreAllImagesAndConfig(); } catch(e) {} });
+  [600, 1800, 4000, 8000].forEach(function(ms){ setTimeout(function(){ try { restoreAllImagesAndConfig(); } catch(e) {} }, ms); });
 
   /* core 的 ct("akini_home_bg") 会在启动后异步再写一次 background-image，
      而且不带 !important，会把上面恢复的壁纸覆盖成不生效的内联声明。

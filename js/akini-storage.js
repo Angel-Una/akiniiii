@@ -14,10 +14,14 @@
       var migrated = 0;
       var freedBytes = 0;
       var keysToCheck = [];
+      var totalBytes = 0;
       for (var idx = 0; idx < totalKeys; idx++) {
         try {
           var k = origKey ? origKey.call(rawLS, idx) : rawLS.key(idx);
-          if (k && String(k).indexOf('akini_') === 0) keysToCheck.push(k);
+          if (k && String(k).indexOf('akini_') === 0) {
+            keysToCheck.push(k);
+            try { var tv = origGet ? origGet.call(rawLS, k) : rawLS.getItem(k); if (tv) totalBytes += tv.length; } catch (eL) {}
+          }
         } catch (eK) {}
       }
       keysToCheck.forEach(function (k) {
@@ -35,7 +39,9 @@
             // 这些键是同步读取的唯一数据源，删了就会导致刷新后界面渲染为默认（被重置）
             // 此前存在 len > 1.8MB 的漏洞，导致超长聊天记录/带图背景被误删 —— 已修复
             var isEssential = _isEssentialImgKey(k) || _isEssentialTextKey(k) || _keepInLs(k);
-            if (!isEssential) {
+            // 只有 localStorage 接近配额上限（>3.5MB）时才把非关键大值从 LS 移除。
+            // 空间充足时保留 LS 副本：同步读第一手就能拿到，刷新后不会先渲染默认值再被异步恢复覆盖。
+            if (!isEssential && totalBytes > (3500 * 1024)) {
               if (origRemove) origRemove.call(rawLS, k); else rawLS.removeItem(k);
               migrated++;
               freedBytes += len;
@@ -617,6 +623,8 @@
               // 对外暴露"启动对账已完成"门闩——云备份等恢复层据此判断大键是否真的缺失
               try { window.__akiniStorageRestored = true; } catch (e0) {}
               try { window.__akiniRestoreSettled = true; } catch (e1) {} // 启动对账完成，放行 __akiniBootApp（防默认值抢跑挡住真实数据恢复）
+              // 通知恢复层：IDB → LS 回填已完成，可以重新把图片/文字上屏了
+              try { window.dispatchEvent(new Event('akini-storage-restored')); } catch (eEv) {}
               // 启动期暂缓的写入落盘：强制写回 IndexedDB，确保用户数据落盘
               // 关键修复：空值（'[]'/'{}'/'null'）一律不落盘——防止任何遗漏路径把
               // 启动默认空值写回 IDB 覆盖真实数据（数据丢失双保险之二）
