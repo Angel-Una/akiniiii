@@ -785,7 +785,18 @@ window.__akiniDefer2=function(fn){if("requestIdleCallback"in window){requestIdle
   // 只写主键：同一张图写 4 个键会把 localStorage 配额挤爆，导致其他图片被驱逐后变黑
   function persist(keys, dataUrl) {
     var primary = keys[0];
+    /* 内存镜像先落，保证当前会话内任何同步读取都能拿到新图 */
+    try { if (window.akiniStore && window.akiniStore.memorySet) window.akiniStore.memorySet(primary, dataUrl); } catch (eM0) {}
     try { localStorage.setItem(primary, dataUrl); } catch (e) {}
+    /* 关键修复：直接写 IndexedDB 主键+备份键。
+       之前只靠 akiniStore.set → 启动对账未完成时值进 _preRestorePending，
+       刷新/关闭后不会再补写，图片就永久丢失（现象=刷新后图片消失）。 */
+    try {
+      if (window._idbStore && window._idbStore.set) {
+        window._idbStore.set(primary, dataUrl);
+        window._idbStore.set(primary + '_backup', dataUrl);
+      }
+    } catch (eIdb) {}
     try {
       if (window.akiniStore && typeof window.akiniStore.set === 'function') {
         window.akiniStore.set(primary, dataUrl);

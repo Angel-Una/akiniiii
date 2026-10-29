@@ -16,6 +16,9 @@ function __akiniS1ChangeCover() {
       if (el) {
         el.style.setProperty('background-image', 'url("' + event.target.result + '")', 'important');
         try { localStorage.setItem('akini_s1_cover', event.target.result); } catch(err) {}
+        /* 同步内存 + IndexedDB，避免刷新后大图（LS 配额放不下）彻底丢失 */
+        try { if (window.akiniStore && window.akiniStore.memorySet) window.akiniStore.memorySet('akini_s1_cover', event.target.result); } catch(eM1) {}
+        try { if (window._idbStore && window._idbStore.set) { window._idbStore.set('akini_s1_cover', event.target.result); window._idbStore.set('akini_s1_cover_backup', event.target.result); } } catch(eI1) {}
       }
     };
     reader.readAsDataURL(file);
@@ -156,4 +159,94 @@ window.loadS1SavedData = function() {
 
 document.addEventListener('DOMContentLoaded', function() {
   window.loadS1SavedData();
+});
+
+/* ============================================================
+   首页大图强恢复（修复「封面底图 / 拍立得照片 刷新后消失」）
+   根因：图片 > 40KB 时只落 IndexedDB（localStorage 配额放不下或启动瘦身被删），
+   刷新后同步读 localStorage 必为空；原先只依赖一次 loadS1SavedData + 单个 get 回调，
+   IDB 未就绪时回调拿不到值，图片就永久空白。
+   这里改为：LS → 内存 → IDB(主键/备份键) 三级兜底，并在多个时机重试。
+   ============================================================ */
+function __akiniS1ValidImg(v) {
+  return !!(v && typeof v === 'string' && v.length >= 100 &&
+    (/^data:image\//i.test(v) || /^(blob:|https?:\/\/|\/)/i.test(v)));
+}
+
+function __akiniS1ApplyImg(slot, val) {
+  if (!__akiniS1ValidImg(val)) return false;
+  try { localStorage.setItem(slot.lsKey, val); } catch (e0) {}
+  try { if (window.akiniStore && window.akiniStore.memorySet) window.akiniStore.memorySet(slot.lsKey, val); } catch (e1) {}
+  var el = document.getElementById(slot.elId);
+  if (!el) return true;
+  if (slot.mode === 'src') { el.src = val; }
+  else {
+    el.style.setProperty('background-image', 'url("' + val + '")', 'important');
+    el.style.setProperty('background-size', 'cover', 'important');
+    el.style.setProperty('background-position', 'center', 'important');
+    el.style.setProperty('background-repeat', 'no-repeat', 'important');
+  }
+  return true;
+}
+
+function __akiniS1RestoreSlot(slot) {
+  /* ① localStorage（拦截层会优先返回内存镜像） */
+  var v = null;
+  try { v = localStorage.getItem(slot.lsKey); } catch (e0) {}
+  if (__akiniS1ApplyImg(slot, v)) return;
+  /* ② 内存镜像 */
+  try {
+    if (window.akiniStore && window.akiniStore.memoryGet) {
+      var m = window.akiniStore.memoryGet(slot.lsKey);
+      if (__akiniS1ApplyImg(slot, m)) return;
+    }
+  } catch (e1) {}
+  /* ③ IndexedDB 主键 + 备份键（异步，拿不到时继续尝试别名键） */
+  var IDB = window._idbStore;
+  if (!IDB || !IDB.get) return;
+  var keys = [slot.lsKey].concat(slot.altKeys || []);
+  var ki = 0;
+  (function nextKey() {
+    if (ki >= keys.length) return;
+    var k = keys[ki++];
+    try {
+      IDB.get(k, function (dv) {
+        if (__akiniS1ApplyImg(slot, dv)) return;
+        try {
+          IDB.get(k + '_backup', function (bv) {
+            if (__akiniS1ApplyImg(slot, bv)) return;
+            nextKey();
+          });
+        } catch (e3) { nextKey(); }
+      });
+    } catch (e2) { nextKey(); }
+  })();
+  /* 顺带用 akiniStore.get（内部同样查 IDB，作为另一条兜底链路） */
+  try {
+    if (window.akiniStore && window.akiniStore.get) {
+      window.akiniStore.get(slot.lsKey, function (sv) { if (__akiniS1ValidImg(sv)) __akiniS1ApplyImg(slot, sv); });
+    }
+  } catch (e4) {}
+}
+
+var __akiniS1ImgSlots = [
+  { lsKey: 'akini_s1_cover', elId: 's1CoverBg',     mode: 'bg',  altKeys: ['akini_s1_cover_bg'] },
+  { lsKey: 'akini_s1_photo', elId: 's1PolaroidImg', mode: 'bg',  altKeys: ['akini_s1_polaroid_img'] },
+  { lsKey: 'akini_my_avatar', elId: 's1AvatarImg',  mode: 'src', altKeys: ['akini_s1_avatar', 'akini_icity_my_avatar'] }
+];
+
+window.__akiniS1HardRestore = function () {
+  try { __akiniS1ImgSlots.forEach(__akiniS1RestoreSlot); } catch (e) {}
+};
+window.__akiniS1HardRestore();
+document.addEventListener('DOMContentLoaded', function () { window.__akiniS1HardRestore(); });
+/* 首屏之后数据才从 IDB 回填，必须多轮补渲染（只兜底不覆盖，有值即跳过） */
+[600, 1500, 3000, 6000, 10000].forEach(function (ms) {
+  setTimeout(function () { try { window.__akiniS1HardRestore(); } catch (e) {} }, ms);
+});
+['akini-storage-restored', 'akini-img-ready', 'load', 'pageshow'].forEach(function (evt) {
+  window.addEventListener(evt, function () { try { window.__akiniS1HardRestore(); } catch (e) {} });
+});
+document.addEventListener('visibilitychange', function () {
+  if (!document.hidden) { try { window.__akiniS1HardRestore(); } catch (e) {} }
 });
