@@ -136,6 +136,8 @@
 
   function startListeningFromHome() {
     hideMusicHome();
+    /* 我发起的一起听：标记邀请方为我自己，结束时总结卡片由我发出 */
+    try { Storage.prototype.setItem.call(localStorage, 'akini_music_invited_by_ta', '0'); } catch (e) {}
     try {
       var app = $('app-music');
       if (app) { app.style.display = 'flex'; app.classList.add('show'); }
@@ -297,6 +299,8 @@
       var ipopup = $('musicInvitePopup');
       if (ipopup && ipopup.style.display === 'flex') return false;
       _lastInviteTs = now;
+      /* TA 发起的一起听邀请：标记邀请方为 TA，结束时总结卡片由 TA 发出 */
+      try { Storage.prototype.setItem.call(localStorage, 'akini_music_invited_by_ta', '1'); } catch (e) {}
       var ta = getDefaultContact();
       var taName = ta ? (ta.name || 'TA') : 'TA';
       try { window.__akiniToast && window.__akiniToast(taName + ' 邀请你一起听歌'); } catch (e) {}
@@ -378,6 +382,8 @@
   function rejectMusicInvite() {
     disableInviteCards();
     closeMusicInvitePopup();
+    /* 拒绝邀请：清除邀请方标记，避免影响下次会话 */
+    try { Storage.prototype.setItem.call(localStorage, 'akini_music_invited_by_ta', '0'); } catch (e) {}
     try {
       var ta = getDefaultContact();
       var taName = ta ? (ta.name || 'TA') : 'TA';
@@ -405,8 +411,14 @@
   }
   function sendMusicEndCard(durationSec, songCount, myCount, taCount) {
     try {
-      if (!window.akiniContacts) return;
-      var cid = window.akiniContacts.getActiveChatId && window.akiniContacts.getActiveChatId();
+      /* cid 兜底：不在聊天页时 getActiveChatId 可能为空，用默认联系人 id 顶上，
+         否则总结卡片发不出去（用户以为没有一起听记录） */
+      var cid = null;
+      try { cid = window.akiniContacts && window.akiniContacts.getActiveChatId && window.akiniContacts.getActiveChatId(); } catch (e) {}
+      if (!cid) {
+        var dc = getDefaultContact();
+        if (dc && dc.id) cid = dc.id;
+      }
       if (!cid) return;
       var myAv = getMyAvatar();
       var ta = getDefaultContact();
@@ -415,9 +427,11 @@
       var durText = fmtDurationFull(durationSec);
       var total = (myCount || 0) + (taCount || 0);
       var dataAttr = 'data-dur="' + (durationSec || 0) + '" data-songs="' + (songCount || 0) + '" data-my="' + (myCount || 0) + '" data-ta="' + (taCount || 0) + '"';
-      var html = '<div class="msg-row me" data-ts="' + __akiniNextTs() + '">' +
-        '<div class="msg-content-line">' +
-        '<div class="bubble music-end-bubble" ' + dataAttr + ' onclick="event.stopPropagation();window.__akiniOpenMusicEndPopup &amp;&amp; window.__akiniOpenMusicEndPopup(this)" style="background:#fff !important;border:1px solid #e8e8e8 !important;border-radius:16px !important;padding:8px 14px !important;min-width:196px !important;max-width:236px !important;cursor:pointer;color:#1a1a1a !important;box-shadow:0 4px 14px rgba(0,0,0,.07) !important;">' +
+      /* 判断邀请方：TA 邀请 → 卡片由 TA 发出（other，头像在左）；我邀请 → 卡片由我发出（me，头像在右）。
+         用 Storage.prototype.getItem.call 直读，绕开 akiniStore 内存缓存，确保拿到最新值 */
+      var invitedByTa = false;
+      try { invitedByTa = '1' === Storage.prototype.getItem.call(localStorage, 'akini_music_invited_by_ta'); } catch (e) {}
+      var bubbleInner =
         '<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px;">' +
         '<div style="flex:1;min-width:0;">' +
         '<div style="font-size:12px;color:#888;line-height:1.3;margin-bottom:1px;">我们一起听了</div>' +
@@ -429,11 +443,24 @@
         '</div>' +
         /* 头尾不连接的横线：约 88% 宽度居中，把「一起听时间」与「聊天记录数量」隔开 */
         '<div class="akini-card-divider" style="width:88%;height:1px;background:#ececec;margin:6px auto 5px;"></div>' +
-        '<div style="font-size:12px;color:#888;line-height:1.3;">' + total + ' 条聊天记录</div>' +
-        '</div>' +
-        '<div class="msg-avatar" data-sender-name="' + String(getMyName()).replace(/"/g, '&quot;') + '" style="background:transparent;border-radius:50%;padding:0;">' + avHTML(myAv, 42) + '</div>' +
-        '</div></div>';
-      window.__akiniAppendMessageHTML(cid, html, { lastMsg: '一起听已结束 · ' + durText, lastSenderName: getMyName() });
+        '<div style="font-size:12px;color:#888;line-height:1.3;">' + total + ' 条聊天记录</div>';
+      var bubble = '<div class="bubble music-end-bubble" ' + dataAttr + ' onclick="event.stopPropagation();window.__akiniOpenMusicEndPopup &amp;&amp; window.__akiniOpenMusicEndPopup(this)" style="background:#fff !important;border:1px solid #e8e8e8 !important;border-radius:16px !important;padding:8px 14px !important;min-width:196px !important;max-width:236px !important;cursor:pointer;color:#1a1a1a !important;box-shadow:0 4px 14px rgba(0,0,0,.07) !important;">' + bubbleInner + '</div>';
+      var html;
+      if (invitedByTa) {
+        /* TA 邀请：头像在左，气泡在右，class="other" */
+        html = '<div class="msg-row other" data-ts="' + __akiniNextTs() + '">' +
+          '<div class="msg-avatar" data-sender-name="' + String(taName).replace(/"/g, '&quot;') + '" style="background:transparent;border-radius:50%;padding:0;">' + avHTML(taAv, 42) + '</div>' +
+          '<div class="msg-content-line">' + bubble + '</div>' +
+          '</div>';
+        window.__akiniAppendMessageHTML(cid, html, { lastMsg: '一起听已结束 · ' + durText, lastSenderName: taName });
+      } else {
+        /* 我邀请：气泡在左，头像在右，class="me" */
+        html = '<div class="msg-row me" data-ts="' + __akiniNextTs() + '">' +
+          '<div class="msg-content-line">' + bubble + '</div>' +
+          '<div class="msg-avatar" data-sender-name="' + String(getMyName()).replace(/"/g, '&quot;') + '" style="background:transparent;border-radius:50%;padding:0;">' + avHTML(myAv, 42) + '</div>' +
+          '</div>';
+        window.__akiniAppendMessageHTML(cid, html, { lastMsg: '一起听已结束 · ' + durText, lastSenderName: getMyName() });
+      }
       var body = $('chatBody');
       if (body) body.scrollTop = body.scrollHeight;
     } catch (e) { console.warn('[r6] end card error', e); }
@@ -594,6 +621,8 @@
     }
     _musicSessionStart = 0;
     try { Storage.prototype.setItem.call(localStorage, 'akini_music_listening_active', '0'); } catch (e) {}
+    /* 会话结束，清除邀请方标记，下次会话从零开始判定 */
+    try { Storage.prototype.setItem.call(localStorage, 'akini_music_invited_by_ta', '0'); } catch (e) {}
   }
 
   window.__r6StartMusicSession = startMusicSessionTracking;
