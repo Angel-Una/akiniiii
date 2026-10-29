@@ -1,6 +1,9 @@
 
 /* 第一屏：封面、头像、文字与拍立得的加载与更换 */
-window.changeS1Cover = function() {
+/* 根因：akini-app.js 在全局作用域声明了 function changeS1Cover/changeS1Avatar（仅写单键），
+   会覆盖本文件赋给 window 的综合版。用命名函数 + DOMContentLoaded 二次绑定，
+   确保综合版（写全键+缓存+IDB+刷新）最终生效。 */
+function __akiniS1ChangeCover() {
   var input = document.createElement('input');
   input.type = 'file';
   input.accept = 'image/*';
@@ -18,9 +21,9 @@ window.changeS1Cover = function() {
     reader.readAsDataURL(file);
   };
   input.click();
-};
+}
 
-window.changeS1Avatar = function() {
+function __akiniS1ChangeAvatar() {
   var input = document.createElement('input');
   input.type = 'file';
   input.accept = 'image/*';
@@ -50,7 +53,19 @@ window.changeS1Avatar = function() {
     reader.readAsDataURL(file);
   };
   input.click();
-};
+}
+
+function __akiniBindS1Handlers() {
+  window.changeS1Cover = __akiniS1ChangeCover;
+  window.changeS1Avatar = __akiniS1ChangeAvatar;
+}
+__akiniBindS1Handlers();
+/* 二次绑定：覆盖 akini-app.js 全局 function 声明（akini-app.js 晚于本文件加载） */
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', __akiniBindS1Handlers);
+} else {
+  __akiniBindS1Handlers();
+}
 
 window.loadS1SavedData = function() {
   try {
