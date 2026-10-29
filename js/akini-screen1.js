@@ -151,9 +151,13 @@ window.loadS1SavedData = function() {
     if (t3 && document.getElementById('s1Text3')) document.getElementById('s1Text3').textContent = t3;
     if (t5 && document.getElementById('s1TextLoc')) document.getElementById('s1TextLoc').textContent = t5;
     if (note && document.getElementById('s1PolaroidNote')) document.getElementById('s1PolaroidNote').textContent = note;
-    if (cover && document.getElementById('s1CoverBg')) document.getElementById('s1CoverBg').style.setProperty('background-image', 'url("' + cover + '")', 'important');
-    if (avatar && document.getElementById('s1AvatarImg')) document.getElementById('s1AvatarImg').src = avatar;
-    if (photo && document.getElementById('s1PolaroidImg')) document.getElementById('s1PolaroidImg').style.setProperty('background-image', 'url("' + photo + '")', 'important');
+    /* 幂等设置：已经是同一张图就跳过，避免重复赋值触发重新解码造成闪烁 */
+    var _cEl = document.getElementById('s1CoverBg');
+    if (cover && _cEl && (_cEl.style.backgroundImage || '').indexOf(cover) < 0) _cEl.style.setProperty('background-image', 'url("' + cover + '")', 'important');
+    var _aEl = document.getElementById('s1AvatarImg');
+    if (avatar && _aEl && (_aEl.getAttribute('src') || '') !== avatar) _aEl.src = avatar;
+    var _pEl = document.getElementById('s1PolaroidImg');
+    if (photo && _pEl && (_pEl.style.backgroundImage || '').indexOf(photo) < 0) _pEl.style.setProperty('background-image', 'url("' + photo + '")', 'important');
   } catch(e){}
 };
 
@@ -175,10 +179,25 @@ function __akiniS1ValidImg(v) {
 
 function __akiniS1ApplyImg(slot, val) {
   if (!__akiniS1ValidImg(val)) return false;
+  var el = document.getElementById(slot.elId);
+  if (!el) {
+    /* 元素还没渲染出来：先把值落盘，等元素出现再补渲染 */
+    try { localStorage.setItem(slot.lsKey, val); } catch (e0) {}
+    try { if (window.akiniStore && window.akiniStore.memorySet) window.akiniStore.memorySet(slot.lsKey, val); } catch (e1) {}
+    return false;
+  }
+  /* 幂等：已经是同一张图就直接跳过，避免重进时反复设置 data URL 触发重新解码 → 闪烁卡顿 */
+  try {
+    if (slot.mode === 'src') {
+      var curSrc = el.getAttribute('src') || el.src || '';
+      if (curSrc && curSrc === val) { slot._applied = true; return true; }
+    } else {
+      var curBg = el.style.backgroundImage || '';
+      if (curBg && curBg.indexOf(val) >= 0) { slot._applied = true; return true; }
+    }
+  } catch (eEq) {}
   try { localStorage.setItem(slot.lsKey, val); } catch (e0) {}
   try { if (window.akiniStore && window.akiniStore.memorySet) window.akiniStore.memorySet(slot.lsKey, val); } catch (e1) {}
-  var el = document.getElementById(slot.elId);
-  if (!el) return true;
   if (slot.mode === 'src') { el.src = val; }
   else {
     el.style.setProperty('background-image', 'url("' + val + '")', 'important');
@@ -186,10 +205,13 @@ function __akiniS1ApplyImg(slot, val) {
     el.style.setProperty('background-position', 'center', 'important');
     el.style.setProperty('background-repeat', 'no-repeat', 'important');
   }
+  slot._applied = true;
   return true;
 }
 
 function __akiniS1RestoreSlot(slot) {
+  /* 已成功应用过的图不再重复设置，避免重进首页时反复解码 data URL 造成闪烁卡顿 */
+  if (slot._applied) return;
   /* ① localStorage（拦截层会优先返回内存镜像） */
   var v = null;
   try { v = localStorage.getItem(slot.lsKey); } catch (e0) {}

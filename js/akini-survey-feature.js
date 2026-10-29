@@ -216,6 +216,7 @@ window.__akiniDefer=function(fn){if("requestIdleCallback"in window){requestIdleC
   }
 
   function renderSurveyList(){
+    // 问卷列表统一使用 akini-runtime.js 的详情版（图二），不再走此处的简版（图一）
     if (typeof window.renderSurveyList === "function" && window.renderSurveyList !== renderSurveyList) {
       return window.renderSurveyList();
     }
@@ -707,7 +708,7 @@ window.__akiniDefer=function(fn){if("requestIdleCallback"in window){requestIdleC
     bindSurveyChatTabs();
     switchSurveyChatTab(window.__surveyChatTab || "mine");
   };
-  window.renderSurveyList = renderSurveyList;
+  // 不再把简版 renderSurveyList 挂到 window 上，避免覆盖 akini-runtime.js 的详情版（图二）
   initSurveyBubbleHandlers();
   // 将问卷弹窗移动到 body 根层级，避免被父级堆叠上下文遮挡
   ['surveyListModal','surveyDetailModal','surveyCreatedListModal'].forEach(function(id){
