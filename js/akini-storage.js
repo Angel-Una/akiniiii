@@ -49,13 +49,47 @@
           }
         } catch (eMig) {}
       });
-      if (migrated > 0) {
+      /* 关键修复：LS 里的图片总量限制在 2.4MB。用户图片全部保留 IDB + 内存副本，
+         但不再把十几张大图同时塞在 LS —— 否则配额一满，后续文字/名字/设置写入全部失败，
+         刷新后就表现为“图片、自定义文字、昵称全部消失”。图片在本次会话直接从内存渲染，
+         下次启动由 IDB 对账回填，不会丢。 */
+      try {
+        var _imgList = [];
+        var _imgTotal = 0;
+        keysToCheck.forEach(function (k) {
+          try {
+            if (!isImgKey(k)) return;
+            var iv = origGet ? origGet.call(rawLS, k) : rawLS.getItem(k);
+            if (iv && typeof iv === 'string' && iv.length > 10) {
+              _imgList.push({ k: k, len: iv.length });
+              _imgTotal += iv.length;
+            }
+          } catch (eI) {}
+        });
+        if (_imgTotal > (2400 * 1024)) {
+          _imgList.sort(function (a, b) { return b.len - a.len; });
+          for (var ii = 0; ii < _imgList.length && _imgTotal > (2400 * 1024); ii++) {
+            var itk = _imgList[ii].k;
+            try {
+              var iv2 = origGet ? origGet.call(rawLS, itk) : rawLS.getItem(itk);
+              if (!iv2) continue;
+              memSet(itk, iv2);
+              queueIdbWrite(itk, iv2);
+              _stampImgKey(itk);
+              if (origRemove) origRemove.call(rawLS, itk); else rawLS.removeItem(itk);
+              _imgTotal -= _imgList[ii].len;
+              freedBytes += _imgList[ii].len;
+            } catch (eR) {}
+          }
+        }
+      } catch (eCap) {}
+      if (migrated > 0 || freedBytes > 0) {
         console.log('[存储架构升级] 成功将 ' + migrated + ' 个大媒体迁移至 IndexedDB，释放 LS 配额: ' + Math.round(freedBytes / 1024) + ' KB');
       }
+      _lsImgUsed = -1;
     } catch (e) {}
   }
 
-  try { migrateLsBigMediaToIdb(); } catch(eMigInit) {}
 
 
   // wipe 保险丝：上一轮清除若在刷新前来不及清完 IDB，本轮启动第一时间清空（cookie 不受 localStorage.clear 影响）
@@ -90,12 +124,16 @@
     akini_avatar_left: 1, akini_avatar_right: 1, akini_my_avatar: 1, akini_ta_avatar: 1,
     akini_icity_my_avatar: 1, akini_icity_ta_avatar: 1,
     akini_s1_avatar: 1, akini_music_bg: 1, akini_chat_bg: 1, akini_day_bg: 1,
-    akini_cover_img: 1, akini_bg_img: 1, akini_music_player_bg: 1
+    akini_cover_img: 1, akini_bg_img: 1, akini_music_player_bg: 1,
+    akini_s2_cover: 1, akini_s2_day_bg: 1, akini_friends_bg: 1,
+    akini_call_bg: 1, akini_callmini_bg: 1, akini_anniv_bg: 1
   };
   // 带后缀的聊天背景/对方背景等：每个会话可独立设置聊天背景（akini_chat_bg_<chatId>）
   var _ESSENTIAL_IMG_PREFIXES = [
     'akini_chat_bg_', 'akini_icity_ta_bg_', 'akini_icity_my_bg_',
-    'akini_contact_avatar_', 'akini_music_custom_bg_'
+    'akini_contact_avatar_', 'akini_music_custom_bg_',
+    'akini_s1_', 'akini_s2_', 'akini_cover_', 'akini_app_icon_',
+    'akini_stickers_', 'akini_media_', 'akini_favs_'
   ];
   function _isEssentialImgKey(k) {
     if (!k) return false;
@@ -132,6 +170,8 @@
   var _KEEP_IN_LS_PREFIXES = [
     'akini_contacts', 'akini_settings_', 'akini_icity_', 'akini_chat_bg_',
     'akini_home_bg', 'akini_bg', 'akini_day_bg', 'akini_s1_', 'akini_cover_',
+    'akini_s2_', 'akini_friends_bg', 'akini_call_bg', 'akini_callmini_bg',
+    'akini_anniv_bg', 'akini_app_icon_', 'akini_stickers_', 'akini_media_',
     'akini_avatar_', 'akini_my_avatar', 'akini_ta_avatar', 'akini_contact_avatar_',
     'akini_music_bg', 'akini_music_player_bg', 'akini_toggle_', 'akini_num_',
     'akini_chat_sessions', 'akini_chat_pins', 'akini_home_avatars', 'akini_music_playlists_v2'
@@ -165,6 +205,10 @@
       origSet = proto.setItem; origGet = proto.getItem; origRemove = proto.removeItem; origKey = proto.key;
     }
   } catch (e) {}
+  /* 迁移调用点必须在 memoryCache/_restored/_preRestorePending 等状态变量初始化之后：
+     在文件顶部调用时这些 var 还是 undefined，memSet 直接抛异常被 catch 吞掉，
+     表现为"迁移从未执行"，LS 被图片塞满后文字/设置全部写不进去。见下方 IIFE 末尾的调用。 */
+
   function lsGet(k) {
     try { return origGet ? origGet.call(rawLS, k) : rawLS.getItem(k); } catch (e) { return null; }
   }
@@ -228,47 +272,57 @@
     try { var l = lsGet('akini_wts_' + k); if (l) t = Math.max(t, +l || 0); } catch (e) {}
     return t;
   }
-  function _evictBigKeys() {
+  function _evictBigKeys(allowEssentialImg) {
     var removed = 0;
     try {
       var keys = lsKeys();
-      // 优先清理最大的图片键（聊天记录/壁纸），保留联系人/设置等小键
+      // 优先清理最大的非关键大键，保留联系人/设置等小键
       var bigs = [];
+      /* 关键图片是第二优先级：配额真的写满时仍然要把它们赶出 LS（内存+IDB 都有副本，
+         本次会话渲染不受影响，下次启动由 IDB 对账回填）。否则图片占满配额后，
+         文字/名字/设置永远写不进去，刷新就表现为"全都消失了"。 */
+      var essImgs = [];
       for (var i = 0; i < keys.length; i++) {
         var k = keys[i];
         if (!k || String(k).indexOf('akini_') !== 0) continue;
         /* 聊天记录/媒体/表情/收藏键不驱逐 */
         var _ks = String(k);
         if (_ks.indexOf('akini_chat_history_') === 0 || _ks.indexOf('akini_media_') === 0 || _ks.indexOf('akini_stickers_') === 0 || _ks.indexOf('akini_favs_') === 0) continue;
-        /* 关键图片/头像/封面绝不从 LS 驱逐：刷新后要立即可见，丢了就是黑块 */
-        if (_isEssentialImgKey(k)) continue;
-        /* 关键文本（字卡库/联系人/各 tab 分组等）也不驱逐：同步读依赖 LS */
+        var v = lsGet(k);
+        if (!v || typeof v !== 'string' || v.length <= 60000) continue;
+        if (_isEssentialImgKey(k)) { essImgs.push({ k: k, len: v.length }); continue; }
+        /* 关键文本（字卡库/联系人/各 tab 分组等）不驱逐：同步读依赖 LS */
         if (_isEssentialTextKey(k)) continue;
         /* 用户设置/个人主页/聊天背景等配置键：驱逐后同步读为空，会显示成默认 */
         if (_keepInLs(k)) continue;
-        var v = lsGet(k);
-        if (v && typeof v === 'string' && v.length > 60000) bigs.push({ k: k, len: v.length });
+        bigs.push({ k: k, len: v.length });
       }
       bigs.sort(function (a, b) { return b.len - a.len; });
-      // 最多清理最大的 8 个大键（它们在 IndexedDB 中有镜像，可按需水合恢复）
-      for (var j = 0; j < bigs.length && j < 8; j++) {
+      essImgs.sort(function (a, b) { return b.len - a.len; });
+      var list = bigs.slice(0, 8);
+      if (!list.length && allowEssentialImg) list = essImgs.slice(0, 3);
+      for (var j = 0; j < list.length; j++) {
         try {
           /* 驱逐前先镜像到 IndexedDB */
-          var _ev = lsGet(bigs[j].k);
+          var _ev = lsGet(list[j].k);
           var _IDB = getIDB();
-          if (_ev && _IDB && _IDB.set) { try { _IDB.set(bigs[j].k, _ev); _IDB.set(bigs[j].k + '_backup', _ev); } catch (eM) {} }
-          lsRemoveRaw(bigs[j].k); removed++;
+          if (_ev && _IDB && _IDB.set) { try { _IDB.set(list[j].k, _ev); _IDB.set(list[j].k + '_backup', _ev); } catch (eM) {} }
+          if (_ev) memSet(list[j].k, _ev);
+          lsRemoveRaw(list[j].k); removed++;
         } catch (e) {}
       }
     } catch (e) {}
     return removed;
   }
   function lsSet(k, v) {
-    try { if (origSet) origSet.call(rawLS, k, v); else rawLS.setItem(k, v); return true; }
+    try { if (origSet) origSet.call(rawLS, k, v); else rawLS.setItem(k, v); if (isImgKey(k)) _lsImgUsed = -1; return true; }
     catch (e) {
       // 配额满（QuotaExceededError）：清理大体积图片键后重试，避免关键数据静默丢失
       try {
-        var evicted = _evictBigKeys();
+        /* 先清非关键大键；仍然腾不出空间就再把关键图片移到 IDB（内存里仍可渲染），
+           保证文字/名字/设置永远写得进去 */
+        var evicted = _evictBigKeys(false);
+        if (!evicted) evicted = _evictBigKeys(true);
         if (evicted > 0) {
           if (origSet) origSet.call(rawLS, k, v); else rawLS.setItem(k, v);
           console.warn('[存储] 配额紧张，已清理' + evicted + '个大键后重试写入', k);
@@ -317,6 +371,7 @@
     } catch (e) { return 0; }
   }
   function lsRemoveRaw(k) {
+    if (isImgKey(k)) _lsImgUsed = -1;
     try { if (origRemove) origRemove.call(rawLS, k); else rawLS.removeItem(k); return true; } catch (e) { return false; }
   }
   function lsKeys() {
@@ -328,6 +383,33 @@
       }
     } catch (e) {}
     return out;
+  }
+  /* LS 里图片键当前占用的字符数。-1 表示未知（写入/删除图片后置为 -1 下次重算）。
+     恢复回填时用它保证 LS 图片总量不超过 2.4MB，剩余配额留给文字/名字/设置，
+     否则图片一多就把配额占满，所有文字类写入失败 → 刷新后"文字、昵称、设置全消失"。 */
+  var _lsImgUsed = -1;
+  function _recalcLsImgUsed() {
+    var tot = 0;
+    try {
+      for (var i = 0; i < rawLS.length; i++) {
+        var k = origKey ? origKey.call(rawLS, i) : rawLS.key(i);
+        if (!k || !isImgKey(k)) continue;
+        var v = origGet ? origGet.call(rawLS, k) : rawLS.getItem(k);
+        if (v && typeof v === 'string') tot += v.length;
+      }
+    } catch (e) {}
+    _lsImgUsed = tot;
+    return tot;
+  }
+  /* 是否还有配额把这张图放进 LS（总量上限 2.4MB；超了只留内存+IDB） */
+  function _imgLsBudgetOk(k, v) {
+    try {
+      if (!v || typeof v !== 'string') return true;
+      if (_lsImgUsed < 0) _recalcLsImgUsed();
+      var old = 0;
+      try { var ov = origGet ? origGet.call(rawLS, k) : rawLS.getItem(k); old = ov ? ov.length : 0; } catch (eO) {}
+      return (_lsImgUsed - old + v.length) <= (2400 * 1024);
+    } catch (e) { return true; }
   }
 
   // ---- 内存缓存：同步读取的权威层，IDB 恢复后也会回填到这里 ----
@@ -481,7 +563,7 @@
           /* 关键图片绝不从 LS 驱逐：写不进就先驱逐其他大键再重试，
              旧值也保留在 LS——总比刷新后黑块强（数据只在 IDB 时同步读拿不到） */
           try { _imgLsOk = lsSet(k, v); } catch (eB) {}
-          if (!_imgLsOk) { try { _evictBigKeys(); _imgLsOk = lsSet(k, v); } catch (eB2) {} }
+          if (!_imgLsOk) { try { var _e3 = _evictBigKeys(false); if (!_e3) _e3 = _evictBigKeys(true); _imgLsOk = lsSet(k, v); } catch (eB2) {} }
         } else if (v.length <= 1800 * 1024) {
           try { _imgLsOk = lsSet(k, v); } catch (eB) {}
         }
@@ -682,7 +764,13 @@
                   || _ks2.indexOf('akini_icity_ta_avatar') === 0
                   || _ks2.indexOf('akini_s1_avatar') === 0
                   || _ks2.indexOf('akini_home_bg') === 0
-                  || _ks2.indexOf('akini_bg') === 0;
+                  || _ks2.indexOf('akini_bg') === 0
+                  || _ks2.indexOf('akini_cover_img') === 0
+                  || _ks2.indexOf('akini_cover_bg') === 0
+                  || _ks2.indexOf('akini_s1_photo') === 0
+                  || _ks2.indexOf('akini_s1_cover') === 0
+                  || _ks2.indexOf('akini_music_bg') === 0
+                  || _ks2.indexOf('akini_friends_bg') === 0;
                 /* 【数据丢失根因修复】聊天记录在 LS 里可能只是被截断的尾部
                    （akini-core 对 >50KB 的聊天记录只把最后约 100KB 写进 LS）。
                    旧逻辑无条件信 LS，会把截断尾巴当成全量，随后又用短值覆盖 IDB 全量，
@@ -716,7 +804,25 @@
                   /* 关键配置/图片在 LS 里为空时写回：否则下次启动的同步读取会拿到空值，
                      首页背景/聊天背景/联系人等被渲染成默认，看起来就是"被重置" */
                   if (_isEssentialImgKey(k) || _isEssentialTextKey(k) || _keepInLs(k)) {
-                    if (!lsSet(k, v)) markDirty(k); else clearDirty(k);
+                    var _lsFull = false;
+                    try {
+                      var _lsTot = 0;
+                      for (var _li = 0; _li < rawLS.length; _li++) {
+                        var _lk = origKey ? origKey.call(rawLS, _li) : rawLS.key(_li);
+                        var _lv = origGet ? origGet.call(rawLS, _lk) : rawLS.getItem(_lk);
+                        if (_lv) _lsTot += _lv.length;
+                      }
+                      _lsFull = _lsTot > (3600 * 1024);
+                    } catch (eT) {}
+                    /* 图片优先留在内存(IDB 还有一份)：LS 快满或图片总量超 2.4MB 时不再回填图片，
+                       给文字/名字/设置留出配额（否则回填几张大图就又写不进文字了） */
+                    var _imgBudgetFull = false;
+                    if (isImgKey(k)) {
+                      if (_lsImgUsed < 0) _recalcLsImgUsed();
+                      _imgBudgetFull = _lsFull || _lsImgUsed + v.length > (2400 * 1024);
+                    }
+                    if (_imgBudgetFull) { queueIdbWrite(k, v); clearDirty(k); }
+                    else if (!lsSet(k, v)) markDirty(k); else clearDirty(k);
                   } else {
                     lsRemoveRaw(k);
                     clearDirty(k);
@@ -864,24 +970,29 @@
         }
         var big = self.isCritical(k) && self.isBigVal(sv);
         var ok = true;
-        // 1) 原始写入：关键图片必须留在 LS，避免刷新后先空白/旧图再闪新图
-        if (_isEssentialImgKey(k)) {
+        var _imgBudgetOk = true;
+        try { if (isImgKey(k)) _imgBudgetOk = _imgLsBudgetOk(k, v); } catch (eBP) {}
+        // 1) 原始写入：关键图片必须留在 LS，避免刷新后先空白/旧图再闪新图；
+        //    但图片总量超过 2.4MB 预算时改走内存+IDB，给文字/名字/设置留出配额
+        if (_isEssentialImgKey(k) && _imgBudgetOk) {
           try { self.origSet.call(this, k, v); }
           catch (e) {
             try {
-              var _ev = _evictBigKeys();
+              var _ev = _evictBigKeys(false);
+              if (!_ev) _ev = _evictBigKeys(true);
               if (_ev > 0) { self.origSet.call(this, k, v); ok = true; }
               else { ok = false; }
             } catch (e2) { ok = false; }
           }
-        } else if (_isEssentialTextKey(k) || _keepInLs(k)) {
+        } else if ((_isEssentialTextKey(k) || _keepInLs(k)) && _imgBudgetOk) {
           /* 关键配置必须留在 LS：只在内存/IDB 的话，下次启动同步读拿到空值，
              首页背景/聊天背景/联系人名会渲染成默认，看起来就是"设置被重置"；
              联系人键还会触发启动补建默认联系人，变成两个联系人。 */
           try { self.origSet.call(this, k, v); }
           catch (e) {
             try {
-              var _evK = _evictBigKeys();
+              var _evK = _evictBigKeys(false);
+              if (!_evK) _evK = _evictBigKeys(true);
               if (_evK > 0) { self.origSet.call(this, k, v); ok = true; }
               else { ok = false; }
             } catch (e3) { ok = false; }
@@ -893,12 +1004,14 @@
           try { self.origSet.call(this, k, v); } catch (e) {
             // 配额满：清理大体积图片键后重试，避免关键数据静默丢失
             try {
-              var _ev2 = _evictBigKeys();
+              var _ev2 = _evictBigKeys(false);
+              if (!_ev2) _ev2 = _evictBigKeys(true);
               if (_ev2 > 0) { self.origSet.call(this, k, v); ok = true; }
               else { ok = false; }
             } catch (e2) { ok = false; }
           }
         }
+        if (isImgKey(k)) _lsImgUsed = -1;
         // 2) 镜像层失败无所谓，绝不影响数据本体
         try {
           if (self.isCritical(k)) {
@@ -1055,6 +1168,13 @@
   document.addEventListener('touchend', _persistGestureHandler, true);
 
   // ---- 启动恢复：等 _idbStore 就绪后全量对账 ----
+  /* 启动第一时间把大图迁到内存+IDB 并把 LS 图片总量压到 2.4MB（此时所有状态变量已就绪） */
+  try { migrateLsBigMediaToIdb(); } catch (eMigInit) {}
+  /* 启动期有其它模块（core 的图片写入/背景应用）会把图重新写回 LS 把配额占满，
+     这里在启动后补做几次同样的瘦身，确保最终 LS 图片占用不超过 2.4MB，文字/设置写得进去 */
+  [2000, 6000, 15000].forEach(function (ms) {
+    setTimeout(function () { try { migrateLsBigMediaToIdb(); } catch (eRe) {} }, ms);
+  });
   /* 启动第一时间瘦身 localStorage（清冗余媒体备份 + 超大残留），缓解配额爆满导致的写入失败与闪退 */
   try { startupSlim(); } catch (eS) {}
   // 无 IDB 或 IDB 不支持 keys 时立即标记恢复完成，避免写入一直暂存 _preRestorePending

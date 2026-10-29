@@ -96,11 +96,71 @@
     return '';
   }
 
+  /* 首页顶部大卡封面 / 背景卡：配额满时值可能只存在 IndexedDB，
+     同步读不到就必须异步从 IDB 取回，否则刷新后永远是灰底空白。 */
+  function applyCoverArea(url) {
+    if (!url || typeof url !== 'string' || url.length <= 10) return;
+    var el = document.getElementById('coverAreaMain');
+    if (!el) return;
+    if (el.getAttribute('data-applied-bg') === url) return;
+    el.setAttribute('data-applied-bg', url);
+    el.style.setProperty('background-image', 'url("' + url + '")', 'important');
+    el.style.setProperty('background-size', 'cover', 'important');
+    el.style.setProperty('background-position', 'center', 'important');
+    el.style.setProperty('background-repeat', 'no-repeat', 'important');
+  }
+  function applyBgArea(url) {
+    if (!url || typeof url !== 'string' || url.length <= 10) return;
+    var el = document.getElementById('bgArea');
+    if (!el) return;
+    if (el.getAttribute('data-applied-bg') === url) return;
+    el.setAttribute('data-applied-bg', url);
+    el.style.setProperty('background-image', 'url("' + url + '")', 'important');
+    el.style.setProperty('background-size', 'cover', 'important');
+    el.style.setProperty('background-position', 'center', 'important');
+    el.style.setProperty('background-repeat', 'no-repeat', 'important');
+  }
+  var COVER_KEYS = ['akini_cover_img', 'akini_cover_bg', 'akini_s2_cover', 'cover_bg'];
+  var DAY_KEYS = ['akini_day_bg', 'akini_bg_img', 'akini_anniv_bg', 'akini_s2_day_bg', 'day_bg'];
+  function pickKeys(keys) {
+    for (var i = 0; i < keys.length; i++) {
+      var v = pickImg(keys[i]);
+      if (v && v.length > 10) return v;
+    }
+    return '';
+  }
+  /* 逐个从 IndexedDB 里按顺序找，找到第一个就回调（同步读全部落空时才走这里） */
+  function pickKeysIdb(keys, cb) {
+    var i = 0;
+    function next() {
+      if (i >= keys.length) return cb('');
+      var k = keys[i++];
+      try {
+        if (window._idbStore && window._idbStore.get) {
+          window._idbStore.get(k, function (v) {
+            if (v && String(v).length > 10) { cb(String(v)); return; }
+            next();
+          });
+          return;
+        }
+      } catch (e) {}
+      next();
+    }
+    next();
+  }
+
   /* 补齐首页/照片墙/头像等所有可自定义图片位的恢复：
      原实现只恢复 home_bg + s1_avatar + 左右头像，其余图片位在配额满时只存在于 IDB，
      刷新后会一直显示默认图（看起来像"数据消失"）。 */
   function restoreMiscSlots() {
     try {
+      /* 首页顶部卡片封面（用户导入的图最容易"刷新后消失"，优先同步，落空再走 IDB） */
+      var cover = pickKeys(COVER_KEYS);
+      if (cover) applyCoverArea(cover);
+      else pickKeysIdb(COVER_KEYS, applyCoverArea);
+      var day = pickKeys(DAY_KEYS);
+      if (day) applyBgArea(day);
+      else pickKeysIdb(DAY_KEYS, applyBgArea);
       var photo = pickImg('akini_s1_photo');
       var elPhoto = document.getElementById('s1PolaroidImg');
       if (photo && elPhoto && elPhoto.getAttribute('data-applied-src') !== photo) {
@@ -109,6 +169,14 @@
         elPhoto.style.backgroundImage = 'url("' + photo + '")';
         elPhoto.style.backgroundSize = 'cover';
         elPhoto.style.backgroundPosition = 'center';
+      } else if (!photo && elPhoto) {
+        pickKeysIdb(['akini_s1_photo'], function (v) {
+          if (!v || !elPhoto) return;
+          elPhoto.setAttribute('data-applied-src', v);
+          elPhoto.style.backgroundImage = 'url("' + v + '")';
+          elPhoto.style.backgroundSize = 'cover';
+          elPhoto.style.backgroundPosition = 'center';
+        });
       }
       var avL = pickImg('akini_avatar_left') || pickImg('akini_s2_avatar_left') || pickImg('akini_my_avatar') || pickImg('akini_s1_avatar');
       if (avL) __akiniApplyAvatar('avatarLeft', avL);
