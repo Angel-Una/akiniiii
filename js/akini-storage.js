@@ -44,6 +44,8 @@
                这样图片再多也挤不掉联系人、聊天背景、聊天记录这些文字键。
                （之前图片占用 1.4MB+ 配额，文字写不进去 → 刷新后全部"重置"） */
             if (isImgKey(k) || (!isEssential && totalBytes > (3500 * 1024))) {
+              /* 删 LS 之前先同步写一份 IDB，避免"删完还没落盘就被杀进程"导致丢数据 */
+              try { var _IDBm = getIDB(); if (_IDBm && _IDBm.set) _IDBm.set(k, v); } catch (eM0) {}
               if (origRemove) origRemove.call(rawLS, k); else rawLS.removeItem(k);
               migrated++;
               freedBytes += len;
@@ -566,13 +568,21 @@
         }
         if (!_imgLsOk && !_isEssentialImgKey(k)) lsRemoveRaw(k);
       } else if (_isEssentialTextKey(k)) {
-        /* 关键文本数据键（字卡库/联系人/邮件/朋友圈等）：>40KB 时也保留在 LS，
-           保证同步读取（pickWordCards/__wbRead）刷新后立即可用，
-           杜绝"IDB 回填前同步读返回空 → 误判丢失"的窗口。≤1.8MB 时直写 LS。 */
+        /* syy 对齐：localStorage 只做「小体积同步缓存」，大文本的权威副本在 IndexedDB。
+           之前允许 1.8MB 直写 LS：朋友圈/iCity/邮件带图时几个大键就把 5MB 配额吃满，
+           之后联系人、名字、设置的写入全部失败 → 刷新后就是「数据莫名其妙少了好多」。
+           现在 >900KB 不再占 LS：保留内存 + 立即落 IDB，并标记脏键让启动对账信 IDB。 */
         var _txtLsOk = false;
-        if (v.length <= 1800 * 1024) { try { _txtLsOk = lsSet(k, v); } catch (eT) {} }
-        if (!_txtLsOk) lsRemoveRaw(k); else clearDirty(k);
+        if (v.length <= 900 * 1024) { try { _txtLsOk = lsSet(k, v); } catch (eT) {} }
+        if (_txtLsOk) {
+          clearDirty(k);
+        } else {
+          markDirty(k);
+          /* 写入失败时保留 LS 里的旧值作为兜底；只有"体积超限没尝试写"才清掉旧值防陈旧覆盖 */
+          if (v.length > 900 * 1024) lsRemoveRaw(k);
+        }
       } else {
+        markDirty(k);
         lsRemoveRaw(k);
       }
     } else {
@@ -581,7 +591,11 @@
     }
     if (isCriticalKey(k)) {
       if (!_restored) { _preRestorePending[k] = v; }
-      else { queueIdbWrite(k, v); if (isImgKey(k)) flushIdbQueue(); }
+      else {
+        queueIdbWrite(k, v);
+        /* 大体积关键文本（含图动态/日记/邮件）立即落 IDB，不等 500ms 防抖，防止退出丢数据 */
+        if (isImgKey(k) || v.length > 200 * 1024) flushIdbQueue();
+      }
     }
     // localStorage 写失败（配额满等）时立即落盘 IDB，不等 500ms 防抖，防退出丢数据
     if (!lsOk && _restored) flushIdbQueue();
@@ -641,6 +655,12 @@
           if (cur == null || cur === '') {
             idbGet(k, function (v) {
               if (v != null && v !== '' && v !== '[]' && v !== '{}' && v !== 'null') {
+                /* 大图片不驻留内存（读取时按需从 IDB 水合），避免回前台时几百张图一次性灌进堆里造成卡顿/闪退；
+                   文本类数据必须驻留 —— 否则朋友圈/日记/邮件的首帧会是空的，看着就像“数据丢了”。 */
+                if (isImgKey(k) && typeof v === 'string' && v.length > (1024 * 1024)) {
+                  window.__akiniDeferredKeys[k] = 1;
+                  return;
+                }
                 memSet(k, v);
               }
             });

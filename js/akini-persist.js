@@ -27,6 +27,8 @@
   var IMG_LS_MAX = 400 * 1024;       // 大于该体积的图片不进 LS 小快照（IDB 快照仍保留）
 
   var SKIP_RE = /^(akini_next_|akini_last_)/;
+  /* 大体积动态数据：只走 IDB 原键 + 内存，不重复进周期快照 */
+  var HOT_SKIP_RE = /^(akini_posts|akini_posts_backup|akini_icity_diaries|akini_mail_sent|akini_mail_received)$/;
   var SKIP_EXACT = {
     akini_ls_dirty: 1,
     akini_localstorage_snapshot: 1,
@@ -111,6 +113,10 @@
         return;
       }
       var sv = trimChat(k, v);
+      /* 带图朋友圈/iCity/邮件这类大文本，原始副本已经在 IndexedDB 里，
+         再复制一份进 20s 周期快照只会让每次 stringify 多背几 MB（低端机卡顿/闪退主因）。
+         超过 900KB 的直接不参与快照，交付权威副本仍由 IDB 原键承担。 */
+      if (HOT_SKIP_RE.test(k) && sv.length > 900 * 1024) return;
       if (!sv || sv.length > IDB_MAX / 2) return;
       /* 总量预算：避免多会话超大聊天记录把 JSON.stringify 撑爆低端机内存 */
       if (total + sv.length > IDB_MAX) return;
@@ -231,8 +237,10 @@
 
   function fill(k, v) {
     memSet(k, v);
-    if (k.indexOf('akini_chat_history') !== 0) {
-      // 聊天记录只写内存+IDB（LS 侧本来就只保留尾部，避免撑爆配额）
+    /* 对齐 syy：localStorage 只当小体积同步缓存，大文本/图片的权威副本在 IndexedDB。
+       之前无条件回写 LS，带图动态/图片一回填就把 5MB 配额吃满，
+       后续名字/联系人/设置全部写不进去 —— 表现为“数据莫名其妙少了好多”。 */
+    if (k.indexOf('akini_chat_history') !== 0 && !isImg(k) && v.length <= 900 * 1024) {
       try { localStorage.setItem(k, v); } catch (e) {}
     }
     queueIdb(k, v);
