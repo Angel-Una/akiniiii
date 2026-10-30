@@ -779,7 +779,7 @@ window.__akiniDefer=function(fn){if("requestIdleCallback"in window){requestIdleC
     window.akiniSurveyContext = activeTarget ? { targetId: activeId, chatType: activeTarget.type || "contact" } : null;
   }
 
-  function openSurveyCreate(){
+  function openSurveyCreate(mode){
     editingSurveyId = null;
     surveyTitle = "";
     var modal = document.getElementById("surveyCreateModal");
@@ -791,14 +791,22 @@ window.__akiniDefer=function(fn){if("requestIdleCallback"in window){requestIdleC
     var label = document.getElementById("surveyCreateTitleLabel");
     var sendBtn = document.getElementById("surveyCreateSendBtn");
 
-    /* 联系人独立专属问卷配置（为TA添加专属问卷，只保存给TA使用，绝不以我的视角发进聊天） */
-    if(!window.__surveyForContactConfig && window.__wbTab === 'survey'){
-      var curCid = window.__currentWbSurveyCid;
-      if(!curCid && window.akiniContacts && window.akiniContacts.getContacts){
-        var _cs = window.akiniContacts.getContacts() || [];
-        if(_cs[0]) curCid = _cs[0].id;
+    /* 入口决定模式，不再看全局残留状态：
+         mode === 'contact' → 字卡库问卷右上角「为联系人生成专属问卷」，只保存给 TA，不发进聊天；
+         其余（微信聊天里问卷加号）→ 我创建的问卷，发送给联系人作答。
+       旧版靠 __surveyForContactConfig 判断，字卡库点过一次后该值一直残留，
+       导致聊天加号也变成「为 TA 添加问卷」——串台。 */
+    if(mode === 'contact'){
+      if(!window.__surveyForContactConfig){
+        var curCid = window.__currentWbSurveyCid;
+        if(!curCid && window.akiniContacts && window.akiniContacts.getContacts){
+          var _cs2 = window.akiniContacts.getContacts() || [];
+          if(_cs2[0]) curCid = _cs2[0].id;
+        }
+        window.__surveyForContactConfig = curCid || "ta";
       }
-      window.__surveyForContactConfig = curCid || "ta";
+    } else {
+      window.__surveyForContactConfig = "";
     }
     var targetCid = window.__surveyForContactConfig;
     if(targetCid){

@@ -38,10 +38,12 @@
             // 首页核心底图/头像/关键文本/聊天记录/聊天背景：无论大小一律保留在 LS
             // 这些键是同步读取的唯一数据源，删了就会导致刷新后界面渲染为默认（被重置）
             // 此前存在 len > 1.8MB 的漏洞，导致超长聊天记录/带图背景被误删 —— 已修复
-            var isEssential = _isEssentialImgKey(k) || _isEssentialTextKey(k) || _keepInLs(k);
-            // 只有 localStorage 接近配额上限（>3.5MB）时才把非关键大值从 LS 移除。
-            // 空间充足时保留 LS 副本：同步读第一手就能拿到，刷新后不会先渲染默认值再被异步恢复覆盖。
-            if (!isEssential && totalBytes > (3500 * 1024)) {
+            var isEssential = _isEssentialTextKey(k) || _keepInLs(k);
+            /* syy 模型对齐：图片一律不留在 localStorage —— 主存储就是 IndexedDB，
+               内存镜像 + IDB 是图片的唯一权威副本。LS 只放文字/设置类数据，
+               这样图片再多也挤不掉联系人、聊天背景、聊天记录这些文字键。
+               （之前图片占用 1.4MB+ 配额，文字写不进去 → 刷新后全部"重置"） */
+            if (isImgKey(k) || (!isEssential && totalBytes > (3500 * 1024))) {
               if (origRemove) origRemove.call(rawLS, k); else rawLS.removeItem(k);
               migrated++;
               freedBytes += len;
@@ -401,15 +403,10 @@
     _lsImgUsed = tot;
     return tot;
   }
-  /* 是否还有配额把这张图放进 LS（总量上限 1.4MB；超了只留内存+IDB） */
+  /* syy 模型对齐：图片不写 localStorage（只进内存 + IndexedDB）。
+     LS 的配额全部留给文字/设置，避免图片把联系人/聊天背景/聊天记录挤掉。 */
   function _imgLsBudgetOk(k, v) {
-    try {
-      if (!v || typeof v !== 'string') return true;
-      if (_lsImgUsed < 0) _recalcLsImgUsed();
-      var old = 0;
-      try { var ov = origGet ? origGet.call(rawLS, k) : rawLS.getItem(k); old = ov ? ov.length : 0; } catch (eO) {}
-      return (_lsImgUsed - old + v.length) <= (1400 * 1024);
-    } catch (e) { return true; }
+    return false;
   }
 
   // ---- 内存缓存：同步读取的权威层，IDB 恢复后也会回填到这里 ----
@@ -814,12 +811,11 @@
                       }
                       _lsFull = _lsTot > (3600 * 1024);
                     } catch (eT) {}
-                    /* 图片优先留在内存(IDB 还有一份)：LS 快满或图片总量超 1.4MB 时不再回填图片，
-                       给文字/名字/设置留出配额（否则回填几张大图就又写不进文字了） */
+                    /* syy 模型对齐：图片一律不回填 localStorage（只进内存 + IndexedDB），
+                       LS 配额全部留给文字/名字/设置/聊天记录。 */
                     var _imgBudgetFull = false;
                     if (isImgKey(k)) {
-                      if (_lsImgUsed < 0) _recalcLsImgUsed();
-                      _imgBudgetFull = _lsFull || _lsImgUsed + v.length > (1400 * 1024);
+                      _imgBudgetFull = true;
                     }
                     if (_imgBudgetFull) { queueIdbWrite(k, v); clearDirty(k); }
                     else if (!lsSet(k, v)) markDirty(k); else clearDirty(k);

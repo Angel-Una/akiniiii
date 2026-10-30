@@ -316,7 +316,7 @@ window.__akiniDefer2=function(fn){if("requestIdleCallback"in window){requestIdle
     window.__currentWbSurveyCid = cid;
     try { if(window.akiniContacts && window.akiniContacts.setActiveChatId) window.akiniContacts.setActiveChatId(cid); } catch(e){}
     try { localStorage.setItem("akini_active_chat_id", cid); } catch(e){}
-    if(typeof window.openSurveyCreate === "function") window.openSurveyCreate();
+    if(typeof window.openSurveyCreate === "function") window.openSurveyCreate("contact");
   }
   window.__wbSurveyOpenCreate = _openCreateForContact;
 

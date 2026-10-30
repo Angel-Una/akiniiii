@@ -1097,7 +1097,9 @@ window.__akiniNowTs = function () {
       window.akiniContacts.setActiveChatId(cid);
     }
     if (typeof window.openSurveyCreate === "function") {
-      window.openSurveyCreate();
+      /* 显式传 contact：这里是字卡库问卷右上角「为联系人新建专属问卷」，
+         不传的话会被当成聊天加号的「我发给联系人回答」模式 */
+      window.openSurveyCreate("contact");
     }
   };
 
