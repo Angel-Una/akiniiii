@@ -547,6 +547,22 @@
     // 图像键写入即盖章（记录修改时间，供恢复路径仲裁新旧）
     if (isImgKey(k) && v && v.length > 10 && v !== 'null' && v !== 'undefined') { try { _stampImgKey(k); } catch (e0) {} }
     memSet(k, v);
+    /* syy 对齐：聊天记录只走「内存 + IndexedDB」，不再每次发消息都同步写 localStorage。
+       长会话一条消息就要序列化几百 KB 并同步写盘 —— 逐条微卡顿的来源，
+       而且 LS 里只可能是被截断的尾巴，刷新后反而会跟 IDB 的全量打架。 */
+    if (k.indexOf('akini_chat_history') === 0) {
+      markDirty(k);
+      lsRemoveRaw(k);
+      if (isCriticalKey(k)) {
+        if (!_restored) _preRestorePending[k] = v;
+        else {
+          queueIdbWrite(k, v);
+          if (v.length > 200 * 1024) flushIdbQueue();
+        }
+      }
+      if (cb) cb(true);
+      return;
+    }
     var lsOk = true;
     if (isBigVal(v)) {
       /* 图片大键：≤1.8MB 时直写 LS，写不进才删旧残留 */
@@ -844,15 +860,22 @@
                        IDB 有真实值时以 IDB 为准，绝不拿 LS 残值覆盖 */
                     lsRemoveRaw(k);
                     if (_idbEmpty) queueIdbWrite(k, ls);
+                  } else if (_isChatKey) {
+                    /* 聊天记录不再留在 LS：LS 只是旧版本留下的截断尾巴时直接清掉；
+                       LS 那份反而更完整（旧数据）时先落 IDB，下次启动对账相等后再清 */
+                    if (ls.length > v.length) queueIdbWrite(k, ls);
+                    else lsRemoveRaw(k);
                   } else if (ls !== v) {
-                    /* 聊天记录：只有 LS 比 IDB 更完整（更长）时才回写，
-                       否则会把截断的尾部覆盖掉 IDB 里保存的全量记录 */
-                    if (!_isChatKey || ls.length > v.length) queueIdbWrite(k, ls);
+                    queueIdbWrite(k, ls);
                   }
                 } else if (big) {
                   /* 关键配置/图片在 LS 里为空时写回：否则下次启动的同步读取会拿到空值，
                      首页背景/聊天背景/联系人等被渲染成默认，看起来就是"被重置" */
-                  if (_isEssentialImgKey(k) || _isEssentialTextKey(k) || _keepInLs(k)) {
+                  if (_isChatKey) {
+                    /* syy 对齐：聊天记录不回填 localStorage（内存 + IndexedDB 才是权威副本） */
+                    queueIdbWrite(k, v);
+                    clearDirty(k);
+                  } else if (_isEssentialImgKey(k) || _isEssentialTextKey(k) || _keepInLs(k)) {
                     var _lsFull = false;
                     try {
                       var _lsTot = 0;
@@ -999,6 +1022,21 @@
         /* null/undefined 与字面 "null"/"undefined" 一律拒写（空串合法） */
         if (k && String(k).indexOf('akini_') === 0 &&
             (v === null || v === undefined || sv === 'null' || sv === 'undefined')) return;
+        /* syy 对齐：聊天记录只走「内存 + IndexedDB」，localStorage 不再保存截断副本。
+           长会话每发一条消息都要同步序列化并写盘几百 KB —— 逐条卡顿的来源；
+           而 LS 里那份永远只是尾巴，和 IDB 全量对账时反而会打架（“消息越刷越少”）。 */
+        if (k && String(k).indexOf('akini_chat_history') === 0) {
+          memSet(k, sv);
+          markDirty(k);
+          try { origRemove.call(rawLS, k); } catch (eC0) {}
+          if (_restored) {
+            queueIdbWrite(k, sv);
+            if (sv.length > (200 * 1024)) flushIdbQueue();
+          } else {
+            _preRestorePending[k] = sv;
+          }
+          return;
+        }
         /* 图片键空串防御：背景/头像/封面有旧图时，非显式删除不允许写空 */
         if (isImgKey(k) && sv === '' && !window.__akiniWiping && !window._akiniAllowRemove && !_userActing()) {
           try {
