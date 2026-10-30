@@ -3250,39 +3250,72 @@ function __akiniBindSplashEntry(){var t=document.getElementById("openSplashNotic
     var a = document.createElement("a");
     a.href = url;
     a.download = fileName;
+    a.rel = "noopener";
     a.style.display = "none";
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
+    /* 安卓下载是异步的：大 ZIP 还没开始写盘就把 blob URL 撤销，下载会中断/失败，
+       文件管理里自然“什么都没有”。延长到 60s 并忽略已撤销的报错。 */
     setTimeout(function () {
-      URL.revokeObjectURL(url);
-    }, 2000);
+      try { URL.revokeObjectURL(url); } catch (e) {}
+    }, 60000);
   }
 
-  /* iOS Safari 会把 a[download] 的 blob: 链接当作"打开文件"来导航，
-     大 JSON 直接在标签页渲染 → 内存爆掉 → 页面被系统杀掉（用户看到的"闪退"）。
-     优先走 Web Share Level 2（系统分享面板，可"存储到文件"）；不支持时回退传统下载。 */
-  function saveBlobSmart(blob, fileName, done) {
+  /* 手机端导出统一走系统分享面板 / 手动保存弹窗：
+     安卓 WebView、加到桌面的 PWA 里 a[download] 常常静默失败；
+     而 ZIP 是异步生成的，点击导出时的“用户手势”早就过期，
+     浏览器会直接拒绝这次下载 —— 用户看到“导出成功”却哪都找不到文件。
+     这里给出「保存文件」按钮：按钮点击才是有效手势，下载必定落盘。 */
+  function isMobileUA() {
+    try { return /Android|iPhone|iPad|iPod|Mobile|HarmonyOS/i.test(navigator.userAgent || ""); } catch (e) { return false; }
+  }
+  function offerSaveManually(blob, fileName, done) {
+    var modal = window.__akiniCenterModal;
+    if (typeof modal !== "function") return false;
     try {
-      var f = new File([blob], fileName, {
-        type: blob.type || "application/octet-stream",
-      });
-      if (navigator.canShare && navigator.canShare({ files: [f] })) {
-        navigator
-          .share({ files: [f], title: fileName })
-          .then(function () {
-            done && done();
-          })
-          .catch(function (e) {
-            if (e && e.name === "AbortError") return; // 用户主动取消分享，不算失败
+      modal(
+        "导出完成",
+        "文件已生成：" + fileName + "\n\n点击「保存文件」后选择保存位置（安卓建议选「下载 / Download」）。保存后即可在手机文件管理里看到。",
+        {
+          confirm: true,
+          okText: "保存文件",
+          cancelText: "关闭",
+          onClose: function (ok) {
+            if (!ok) return;
             downloadBlob(blob, fileName);
-            done && done();
+            done && done("download");
+          },
+        }
+      );
+      return true;
+    } catch (e) { return false; }
+  }
+  function saveBlobSmart(blob, fileName, done) {
+    var type = (blob && blob.type) || (/\.zip$/i.test(fileName) ? "application/zip" : "application/octet-stream");
+    try {
+      var f = new File([blob], fileName, { type: type });
+      if (navigator.canShare && navigator.canShare({ files: [f] })) {
+        var p;
+        try { p = navigator.share({ files: [f], title: fileName }); } catch (e0) { p = null; }
+        if (p && typeof p.then === "function") {
+          p.then(function () {
+            done && done("share");
+          }).catch(function (e) {
+            if (e && e.name === "AbortError") return; // 用户主动取消分享，不算失败
+            /* NotAllowedError：异步生成导致手势过期，分享被拒 → 交给手动保存按钮 */
+            if (!offerSaveManually(blob, fileName, done)) {
+              downloadBlob(blob, fileName);
+              done && done("download");
+            }
           });
-        return;
+          return;
+        }
       }
     } catch (e) {}
+    if (isMobileUA() && offerSaveManually(blob, fileName, done)) return;
     downloadBlob(blob, fileName);
-    done && done();
+    done && done("download");
   }
 
   function notify(title, body, type) {
@@ -3480,20 +3513,26 @@ function __akiniBindSplashEntry(){var t=document.getElementById("openSplashNotic
           zip
             .generateAsync({
               type: "blob",
+              mimeType: "application/zip",
               compression: "DEFLATE",
               compressionOptions: { level: 6 },
             })
             .then(function (zipBlob) {
-              downloadBlob(zipBlob, fileNameZip);
-              notify(
-                "导出成功",
-                "已导出 ZIP：localStorage " +
-                  Object.keys(payload.localStorage).length +
-                  " 项，IndexedDB " +
-                  Object.keys(payload.indexedDB).length +
-                  " 项",
-                "success"
-              );
+              var countMsg =
+                "localStorage " +
+                Object.keys(payload.localStorage).length +
+                " 项，IndexedDB " +
+                Object.keys(payload.indexedDB).length +
+                " 项";
+              /* 安卓必须走系统分享面板：直接 a[download] 在 WebView/PWA 里常静默失败，
+                 文件既不落盘也没有任何提示（用户以为导出成功，去“文件”里却找不到）。 */
+              saveBlobSmart(zipBlob, fileNameZip, function (how) {
+                if (how === "share") {
+                  notify("导出成功", "已导出 ZIP（" + countMsg + "）。请到刚才在系统面板中选择的保存位置查看。", "success");
+                } else {
+                  notify("导出成功", "已导出 ZIP（" + countMsg + "）。文件保存在手机「下载 / Download」目录，可在文件管理中按类型「压缩包」查找。", "success");
+                }
+              });
             })
             .catch(function (e) {
               console.error("[AkiniBackup] ZIP 导出失败", e);
@@ -3512,10 +3551,12 @@ function __akiniBindSplashEntry(){var t=document.getElementById("openSplashNotic
     var fileName = "akini-backup-all-" + dateStr + ".json";
     var str = "\uFEFF" + JSON.stringify(payload);
     var blob = new Blob([str], { type: "application/json;charset=utf-8" });
-    saveBlobSmart(blob, fileName, function () {
+    saveBlobSmart(blob, fileName, function (how) {
       notify(
         "导出成功",
-        "已全量导出所有设置与内容（含头像、背景图、聊天、字卡、自定义文字等全部数据）",
+        how === "share"
+          ? "已全量导出所有设置与内容（含头像、背景图、聊天、字卡、自定义文字等全部数据），请到系统面板中选择的保存位置查看。"
+          : "已全量导出所有设置与内容（含头像、背景图、聊天、字卡、自定义文字等全部数据）。文件在手机「下载 / Download」目录；若在微信/QQ 内打开，请用系统浏览器重新导出。",
         "success"
       );
     });
