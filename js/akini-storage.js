@@ -791,8 +791,12 @@
                 if (_memChatWins) {
                   queueIdbWrite(k, _ref); // 快照里的全量聊天记录写回 IDB，修复被截断的镜像
                 } else if (_lsReal) {
-                  if (isImgKey(k) && !_isEssentialImgKey(k)) lsRemoveRaw(k);
-                  else if (ls !== v) {
+                  if (isImgKey(k)) {
+                    /* syy 模型：图片只在 IndexedDB，LS 里的残留副本一律清掉；
+                       IDB 有真实值时以 IDB 为准，绝不拿 LS 残值覆盖 */
+                    lsRemoveRaw(k);
+                    if (_idbEmpty) queueIdbWrite(k, ls);
+                  } else if (ls !== v) {
                     /* 聊天记录：只有 LS 比 IDB 更完整（更长）时才回写，
                        否则会把截断的尾部覆盖掉 IDB 里保存的全量记录 */
                     if (!_isChatKey || ls.length > v.length) queueIdbWrite(k, ls);
@@ -823,6 +827,10 @@
                     lsRemoveRaw(k);
                     clearDirty(k);
                   }
+                } else if (isImgKey(k)) {
+                  /* 小图同样不写 LS：图片的唯一副本就是内存 + IndexedDB */
+                  queueIdbWrite(k, v);
+                  clearDirty(k);
                 } else {
                   if (lsSet(k, v)) clearDirty(k); else markDirty(k);
                 }
