@@ -30,6 +30,18 @@
              等于每启动一次就把几十 MB 文本重复写库一遍（旧代码还连跑 4 次），
              低端机重进时直接卡死/闪退 —— 已删除。
              图片键先按名字判断，未命中的键连字符串都不读。 */
+          /* 朋友圈 / iCity：旧版本把图片内联在整段 JSON 里，这里迁到 IDB 的「引用版」并清空 LS */
+          if (_MEDIA_KEYS[k]) {
+            var _mv = origGet ? origGet.call(rawLS, k) : rawLS.getItem(k);
+            if (_mv && _mv.length > (40 * 1024)) {
+              queueIdbWrite(k, _mv); // 入队时即转成引用版
+              try { var _IDBp = getIDB(); if (_IDBp && _IDBp.set) _IDBp.set(k, _externalizeForPersist(k, _mv)); } catch (eMp) {}
+              if (origRemove) origRemove.call(rawLS, k); else rawLS.removeItem(k);
+              migrated++;
+              freedBytes += _mv.length;
+            }
+            return;
+          }
           if (!isImgKey(k)) return;
           var v = origGet ? origGet.call(rawLS, k) : rawLS.getItem(k);
           if (!v) return;
@@ -425,13 +437,132 @@
   function markDirty(k) { if (!_lsDirty[k]) { _lsDirty[k] = 1; lsDirtySave(); } }
   function clearDirty(k) { if (_lsDirty[k]) { delete _lsDirty[k]; lsDirtySave(); } }
 
-  function getIDB() { return window._idbStore; }
+  function getIDB() {
+    var IDB = window._idbStore;
+    /* 核心模块（akini-core）会绕过本层直接 _idbStore.set('akini_posts', 全量JSON)：
+       在这里给底层实例一次性套上「媒体外置」，保证任何写入路径落库的都是引用版 */
+    try {
+      if (IDB && IDB.set && !IDB.__akiniMediaPatched) {
+        IDB.__akiniMediaPatched = 1;
+        var _origIdbSet = IDB.set;
+        IDB.set = function (k, v) {
+          try { if (v != null) v = _externalizeForPersist(k, v); } catch (eP) {}
+          return _origIdbSet.apply(IDB, [k, v]);
+        };
+      }
+    } catch (ePatch) {}
+    return IDB;
+  }
   function idbGet(k, cb) {
     var IDB = getIDB();
     if (!IDB || !IDB.get) { if (cb) cb(null); return; }
-    try { IDB.get(k, function (v) { if (cb) cb(v != null ? String(v) : null); }); } catch (e) { if (cb) cb(null); }
+    try {
+      IDB.get(k, function (v) {
+        if (v == null) { if (cb) cb(null); return; }
+        /* 媒体外置键：读出来先把 akini-ref 展开回 dataURL，调用方拿到的永远是完整数据 */
+        _expandMedia(k, String(v), function (v2) { if (cb) cb(v2); });
+      });
+    } catch (e) { if (cb) cb(null); }
   }
 
+  /* ============ 媒体外置（对齐 syy：媒体存独立 IDB 键，业务 JSON 只存引用） ============
+     朋友圈 / iCity 的动态图片是 base64 内联在整段 JSON 里的：几十条动态就是十几 MB。
+     后果：① 每次点赞/评论都要把整段 JSON 重新序列化写盘（卡顿）；
+           ② 启动要把十几 MB 整段解析进内存（低端机闪退）；
+           ③ 一超 4MB 就被内存预算判为「大键」不驻留，界面读到空 → 看起来"帖子没了"。
+     现在统一在持久化一侧把大 dataURL 换成 akini-ref:<id> 引用，媒体本体写进 IDB；
+     内存里始终是完整 dataURL（渲染、导出、备份代码完全不用改），启动恢复时批量展开。 */
+  var MEDIA_REF_PRE = 'akini-ref:';
+  var MEDIA_KEY_PRE = 'akini_mref_';
+  var MEDIA_MIN_LEN = 24 * 1024;
+  var _mediaMem = {};
+  var _mediaMemQ = [];
+  var _mediaMemBytes = 0;
+  var _mediaRev = {};
+  var _mediaSeq = 0;
+  var _MEDIA_KEYS = { akini_posts: 1, akini_posts_backup: 1, akini_icity_diaries: 1, akini_icity_diaries_backup: 1 };
+  var _DATAURL_RE = /^data:(?:image|video)\//;
+  function _mediaRemember(id, d) {
+    if (_mediaMem[id]) return;
+    _mediaMem[id] = d;
+    _mediaMemQ.push(id);
+    _mediaMemBytes += d.length;
+    /* 会话缓存上限 16MB：启动展开时只留最近用到的，避免和展开后的 JSON 一起把内存翻倍 */
+    while (_mediaMemBytes > (16 * 1024 * 1024) && _mediaMemQ.length) {
+      var old = _mediaMemQ.shift();
+      if (_mediaMem[old]) { _mediaMemBytes -= _mediaMem[old].length; delete _mediaMem[old]; }
+    }
+  }
+  function _mediaFp(d) { return d.length + '|' + d.slice(0, 64) + '|' + d.slice(-32); }
+  function _mediaPut(d) {
+    var fp = _mediaFp(d);
+    if (_mediaRev[fp]) return _mediaRev[fp];
+    var id = Date.now().toString(36) + '-' + (_mediaSeq++);
+    _mediaRev[fp] = id;
+    _mediaRemember(id, d);
+    try { var IDBm = getIDB(); if (IDBm && IDBm.set) IDBm.set(MEDIA_KEY_PRE + id, d); } catch (eM) {}
+    return id;
+  }
+  function _mediaWalk(v) {
+    if (typeof v === 'string') {
+      return (v.length >= MEDIA_MIN_LEN && _DATAURL_RE.test(v)) ? (MEDIA_REF_PRE + _mediaPut(v)) : v;
+    }
+    if (Array.isArray(v)) { for (var i = 0; i < v.length; i++) v[i] = _mediaWalk(v[i]); return v; }
+    if (v && typeof v === 'object') { for (var kk in v) if (Object.prototype.hasOwnProperty.call(v, kk)) v[kk] = _mediaWalk(v[kk]); return v; }
+    return v;
+  }
+  /* 持久化形态：引用的 id 由内容指纹去重，同一张图不会存两份 */
+  var _mediaMemo = {}; // k -> { expanded, persisted }：内容没变时直接复用，省掉一次几 MB 的 parse+stringify
+  function _externalizeForPersist(k, v) {
+    if (!_MEDIA_KEYS[k] || typeof v !== 'string' || v.length < (200 * 1024) || v.indexOf('data:') < 0) return v;
+    var memo = _mediaMemo[k];
+    if (memo && memo.expanded === v && memo.persisted) return memo.persisted;
+    try {
+      var out = JSON.stringify(_mediaWalk(JSON.parse(v)));
+      _mediaMemo[k] = { expanded: v, persisted: out };
+      return out;
+    } catch (e) { return v; }
+  }
+  /* 恢复形态：把引用换回 dataURL；缺失的引用置空（不渲染破图，也不误判为删除） */
+  function _expandMedia(k, v, cb) {
+    if (!_MEDIA_KEYS[k] || typeof v !== 'string' || v.indexOf(MEDIA_REF_PRE) < 0) { cb(v); return; }
+    var ids = [];
+    try { v.replace(/akini-ref:([0-9a-z-]+)/g, function (m, id) { ids.push(id); return m; }); } catch (e) {}
+    if (!ids.length) { cb(v); return; }
+    var map = {}, missing = 0;
+    ids.forEach(function (id) { if (_mediaMem[id]) map[id] = _mediaMem[id]; });
+    var q = [], seen = {};
+    ids.forEach(function (id) { if (!seen[id] && !map[id]) { seen[id] = 1; q.push(id); } });
+    var running = 0, settled = 0, total = q.length;
+    function finish() {
+      if (missing) console.warn('[媒体] ' + missing + ' 张引用图在 IndexedDB 中缺失，已跳过');
+      var out = v;
+      try { out = v.replace(/akini-ref:([0-9a-z-]+)/g, function (m, id) { return map[id] || ''; }); } catch (e) {}
+      try { if (v !== out) _mediaMemo[k] = { expanded: out, persisted: v }; } catch (eM2) {}
+      cb(out);
+    }
+    if (!total) { finish(); return; }
+    /* 并发上限 4：几百张图一次性并发读会把内存顶起来（低端机闪退） */
+    function pump() {
+      while (running < 4 && q.length) {
+        var id = q.shift();
+        running++;
+        (function (id2) {
+          idbGet(MEDIA_KEY_PRE + id2, function (d) {
+            if (d && d.length > 10) {
+              _mediaRemember(id2, d);
+              /* 记住指纹→id：本次会话再落盘时复用同一个 id，不会生成重复媒体键 */
+              try { _mediaRev[_mediaFp(d)] = id2; } catch (eF) {}
+              map[id2] = d;
+            } else { missing++; }
+            running--; settled++;
+            if (settled === total) finish(); else pump();
+          });
+        })(id);
+      }
+    }
+    pump();
+  }
   // ---- IDB 防抖批量镜像（500ms），页面隐藏/关闭立即落盘 ----
   var _idbQueue = {};
   // 启动恢复完成前的程序性写入暂存：此期间的写入不立即镜像到 IndexedDB，
@@ -459,6 +590,8 @@
   function scheduleIdbFlush() { if (!_idbFlushTimer) _idbFlushTimer = setTimeout(flushIdbQueue, 500); }
   function queueIdbWrite(k, v) {
     if (window.__akiniWiping) return; // 清除数据期间禁止入队
+    /* 落到 IDB 的一律是「引用版」：媒体本体单独成键，业务 JSON 保持小体积 */
+    if (v != null) v = _externalizeForPersist(k, v);
     _idbQueue[k] = v == null ? null : String(v); scheduleIdbFlush();
   }
   try {
@@ -550,7 +683,7 @@
     /* syy 对齐：聊天记录只走「内存 + IndexedDB」，不再每次发消息都同步写 localStorage。
        长会话一条消息就要序列化几百 KB 并同步写盘 —— 逐条微卡顿的来源，
        而且 LS 里只可能是被截断的尾巴，刷新后反而会跟 IDB 的全量打架。 */
-    if (k.indexOf('akini_chat_history') === 0) {
+    if (k.indexOf('akini_chat_history') === 0 || _MEDIA_KEYS[k]) {
       markDirty(k);
       lsRemoveRaw(k);
       if (isCriticalKey(k)) {
@@ -819,6 +952,10 @@
                 // 真实有效数据的取舍：LS 有非空真实值 → 信 LS（最高权威）；否则信 IDB
                 var _ks2 = String(k);
                 var _isCritKey = _ks2.indexOf('akini_chat_history_') === 0
+                  /* 朋友圈/iCity 是用户的核心内容：绝不能被内存预算判为「大键」而跳过驻留，
+                     否则界面同步读到空 → 看起来"帖子凭空消失"（媒体已经外置，体积可控） */
+                  || _ks2.indexOf('akini_posts') === 0
+                  || _ks2.indexOf('akini_icity_diaries') === 0
                   || _ks2.indexOf('akini_my_avatar') === 0
                   || _ks2.indexOf('akini_ta_avatar') === 0
                   || _ks2.indexOf('akini_icity_my_avatar') === 0
@@ -860,8 +997,8 @@
                        IDB 有真实值时以 IDB 为准，绝不拿 LS 残值覆盖 */
                     lsRemoveRaw(k);
                     if (_idbEmpty) queueIdbWrite(k, ls);
-                  } else if (_isChatKey) {
-                    /* 聊天记录不再留在 LS：LS 只是旧版本留下的截断尾巴时直接清掉；
+                  } else if (_isChatKey || _MEDIA_KEYS[_ks2]) {
+                    /* 聊天记录 / 朋友圈 / iCity 不再留在 LS：LS 只是旧版本留下的截断尾巴时直接清掉；
                        LS 那份反而更完整（旧数据）时先落 IDB，下次启动对账相等后再清 */
                     if (ls.length > v.length) queueIdbWrite(k, ls);
                     else lsRemoveRaw(k);
@@ -871,8 +1008,8 @@
                 } else if (big) {
                   /* 关键配置/图片在 LS 里为空时写回：否则下次启动的同步读取会拿到空值，
                      首页背景/聊天背景/联系人等被渲染成默认，看起来就是"被重置" */
-                  if (_isChatKey) {
-                    /* syy 对齐：聊天记录不回填 localStorage（内存 + IndexedDB 才是权威副本） */
+                  if (_isChatKey || _MEDIA_KEYS[_ks2]) {
+                    /* syy 对齐：聊天记录 / 朋友圈 / iCity 不回填 localStorage（内存 + IndexedDB 才是权威副本） */
                     queueIdbWrite(k, v);
                     clearDirty(k);
                   } else if (_isEssentialImgKey(k) || _isEssentialTextKey(k) || _keepInLs(k)) {
@@ -1025,7 +1162,7 @@
         /* syy 对齐：聊天记录只走「内存 + IndexedDB」，localStorage 不再保存截断副本。
            长会话每发一条消息都要同步序列化并写盘几百 KB —— 逐条卡顿的来源；
            而 LS 里那份永远只是尾巴，和 IDB 全量对账时反而会打架（“消息越刷越少”）。 */
-        if (k && String(k).indexOf('akini_chat_history') === 0) {
+        if (k && (String(k).indexOf('akini_chat_history') === 0 || _MEDIA_KEYS[k])) {
           memSet(k, sv);
           markDirty(k);
           try { origRemove.call(rawLS, k); } catch (eC0) {}
