@@ -5845,21 +5845,13 @@ if (wipeBtn) wipeBtn.onclick = function () {
     enterCompanionMain(st);
   }
 
-  /* 头像位置互换：陪伴界面与设置页「交换双方头像位置」共用同一个开关源（window.isSwapped），
-     开启时左右头像互换，关闭时还原；开关切换后由 __akiniRefreshCompanionAvatars 即时刷新 */
-  function companionSwapped() {
-    try {
-      if (typeof window.isSwapped === 'function') return !!window.isSwapped();
-      var v = lsGet('akini_swap_avatar_pos', '0');
-      return '1' === v || 'true' === v;
-    } catch (e) { return false; }
-  }
+  /* 陪伴界面头像：固定「左=我、右=TA」，不参与「交换双方头像位置」开关。
+     开关只作用于首页聊天预览、双人头像、一起听（含总结卡片/详情）。 */
   function applyCompanionAvatars(c) {
     var myA = $('companionMyAvatar'), taA = $('companionTaAvatar');
     var mine = avatarInner(myAvatar()), other = avatarInner(c ? c.avatar : '');
-    var sw = companionSwapped();
-    if (myA) myA.innerHTML = sw ? other : mine;
-    if (taA) taA.innerHTML = sw ? mine : other;
+    if (myA) myA.innerHTML = mine;
+    if (taA) taA.innerHTML = other;
   }
   window.__akiniRefreshCompanionAvatars = function () {
     try {
