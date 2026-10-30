@@ -5845,13 +5845,21 @@ if (wipeBtn) wipeBtn.onclick = function () {
     enterCompanionMain(st);
   }
 
-  /* 陪伴界面头像：固定「左=我、右=TA」，不参与「交换双方头像位置」开关。
-     开关只作用于首页聊天预览、双人头像、一起听（含总结卡片/详情）。 */
+  /* 陪伴界面与首页聊天预览、双人头像、一起听（含总结卡片/详情）共用「交换双方头像位置」开关，
+     开启时左右头像互换，关闭时还原；开关切换后由 __akiniRefreshCompanionAvatars 即时刷新 */
+  function companionSwapped() {
+    try {
+      if (typeof window.isSwapped === 'function') return !!window.isSwapped();
+      var v = lsGet('akini_swap_avatar_pos', '0');
+      return '1' === v || 'true' === v;
+    } catch (e) { return false; }
+  }
   function applyCompanionAvatars(c) {
     var myA = $('companionMyAvatar'), taA = $('companionTaAvatar');
     var mine = avatarInner(myAvatar()), other = avatarInner(c ? c.avatar : '');
-    if (myA) myA.innerHTML = mine;
-    if (taA) taA.innerHTML = other;
+    var sw = companionSwapped();
+    if (myA) myA.innerHTML = sw ? other : mine;
+    if (taA) taA.innerHTML = sw ? mine : other;
   }
   window.__akiniRefreshCompanionAvatars = function () {
     try {
@@ -8014,5 +8022,32 @@ function it(t,e){
   if(document.readyState==='loading') document.addEventListener('DOMContentLoaded', boot);
   else boot();
   setTimeout(boot, 1000);
+})();
+
+/* ===== 一次性清理旧版误标墓碑（只执行一次）=====
+   旧版启动钩子把「本次写入比上次短」中缺失的 id 全部当成删除，
+   导致朋友圈动态 / iCity 日记被永久隐藏（表现为帖子凭空消失）。
+   真实删除时数据本身已从 localStorage、IndexedDB 与备份中移除，
+   清空墓碑列表不会让已删内容复活，只会让被误伤的帖子重新显示。 */
+(function(){
+  var FLAG='akini_tombstone_purge_v1';
+  try{ if(localStorage.getItem(FLAG)==='1') return; }catch(e){ return; }
+  function run(){
+    try{ if(localStorage.getItem(FLAG)==='1') return; }catch(e){ return; }
+    try{ localStorage.setItem('akini_deleted_posts','[]'); }catch(e){}
+    try{ localStorage.setItem('akini_deleted_icity','[]'); }catch(e){}
+    try{
+      if(window._idbStore&&window._idbStore.set){
+        window._idbStore.set('akini_deleted_posts','[]');
+        window._idbStore.set('akini_deleted_icity','[]');
+      }
+    }catch(e){}
+    try{ localStorage.setItem(FLAG,'1'); }catch(e){}
+    try{ if(typeof window._renderPosts==='function') window._renderPosts(); }catch(e){}
+    try{ if(typeof window._renderIcity==='function') window._renderIcity(); }catch(e){}
+  }
+  var done=false;
+  window.addEventListener('akini-storage-restored',function(){ if(done)return; done=true; setTimeout(run,0); });
+  setTimeout(function(){ if(done)return; done=true; run(); },5000);
 })();
 
