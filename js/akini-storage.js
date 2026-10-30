@@ -49,7 +49,7 @@
           }
         } catch (eMig) {}
       });
-      /* 关键修复：LS 里的图片总量限制在 2.4MB。用户图片全部保留 IDB + 内存副本，
+      /* 关键修复：LS 里的图片总量限制在 1.4MB。用户图片全部保留 IDB + 内存副本，
          但不再把十几张大图同时塞在 LS —— 否则配额一满，后续文字/名字/设置写入全部失败，
          刷新后就表现为“图片、自定义文字、昵称全部消失”。图片在本次会话直接从内存渲染，
          下次启动由 IDB 对账回填，不会丢。 */
@@ -66,9 +66,9 @@
             }
           } catch (eI) {}
         });
-        if (_imgTotal > (2400 * 1024)) {
+        if (_imgTotal > (1400 * 1024)) {
           _imgList.sort(function (a, b) { return b.len - a.len; });
-          for (var ii = 0; ii < _imgList.length && _imgTotal > (2400 * 1024); ii++) {
+          for (var ii = 0; ii < _imgList.length && _imgTotal > (1400 * 1024); ii++) {
             var itk = _imgList[ii].k;
             try {
               var iv2 = origGet ? origGet.call(rawLS, itk) : rawLS.getItem(itk);
@@ -385,7 +385,7 @@
     return out;
   }
   /* LS 里图片键当前占用的字符数。-1 表示未知（写入/删除图片后置为 -1 下次重算）。
-     恢复回填时用它保证 LS 图片总量不超过 2.4MB，剩余配额留给文字/名字/设置，
+     恢复回填时用它保证 LS 图片总量不超过 1.4MB，剩余配额留给文字/名字/设置，
      否则图片一多就把配额占满，所有文字类写入失败 → 刷新后"文字、昵称、设置全消失"。 */
   var _lsImgUsed = -1;
   function _recalcLsImgUsed() {
@@ -401,14 +401,14 @@
     _lsImgUsed = tot;
     return tot;
   }
-  /* 是否还有配额把这张图放进 LS（总量上限 2.4MB；超了只留内存+IDB） */
+  /* 是否还有配额把这张图放进 LS（总量上限 1.4MB；超了只留内存+IDB） */
   function _imgLsBudgetOk(k, v) {
     try {
       if (!v || typeof v !== 'string') return true;
       if (_lsImgUsed < 0) _recalcLsImgUsed();
       var old = 0;
       try { var ov = origGet ? origGet.call(rawLS, k) : rawLS.getItem(k); old = ov ? ov.length : 0; } catch (eO) {}
-      return (_lsImgUsed - old + v.length) <= (2400 * 1024);
+      return (_lsImgUsed - old + v.length) <= (1400 * 1024);
     } catch (e) { return true; }
   }
 
@@ -814,12 +814,12 @@
                       }
                       _lsFull = _lsTot > (3600 * 1024);
                     } catch (eT) {}
-                    /* 图片优先留在内存(IDB 还有一份)：LS 快满或图片总量超 2.4MB 时不再回填图片，
+                    /* 图片优先留在内存(IDB 还有一份)：LS 快满或图片总量超 1.4MB 时不再回填图片，
                        给文字/名字/设置留出配额（否则回填几张大图就又写不进文字了） */
                     var _imgBudgetFull = false;
                     if (isImgKey(k)) {
                       if (_lsImgUsed < 0) _recalcLsImgUsed();
-                      _imgBudgetFull = _lsFull || _lsImgUsed + v.length > (2400 * 1024);
+                      _imgBudgetFull = _lsFull || _lsImgUsed + v.length > (1400 * 1024);
                     }
                     if (_imgBudgetFull) { queueIdbWrite(k, v); clearDirty(k); }
                     else if (!lsSet(k, v)) markDirty(k); else clearDirty(k);
@@ -973,7 +973,7 @@
         var _imgBudgetOk = true;
         try { if (isImgKey(k)) _imgBudgetOk = _imgLsBudgetOk(k, v); } catch (eBP) {}
         // 1) 原始写入：关键图片必须留在 LS，避免刷新后先空白/旧图再闪新图；
-        //    但图片总量超过 2.4MB 预算时改走内存+IDB，给文字/名字/设置留出配额
+        //    但图片总量超过 1.4MB 预算时改走内存+IDB，给文字/名字/设置留出配额
         if (_isEssentialImgKey(k) && _imgBudgetOk) {
           try { self.origSet.call(this, k, v); }
           catch (e) {
@@ -1168,10 +1168,10 @@
   document.addEventListener('touchend', _persistGestureHandler, true);
 
   // ---- 启动恢复：等 _idbStore 就绪后全量对账 ----
-  /* 启动第一时间把大图迁到内存+IDB 并把 LS 图片总量压到 2.4MB（此时所有状态变量已就绪） */
+  /* 启动第一时间把大图迁到内存+IDB 并把 LS 图片总量压到 1.4MB（此时所有状态变量已就绪） */
   try { migrateLsBigMediaToIdb(); } catch (eMigInit) {}
   /* 启动期有其它模块（core 的图片写入/背景应用）会把图重新写回 LS 把配额占满，
-     这里在启动后补做几次同样的瘦身，确保最终 LS 图片占用不超过 2.4MB，文字/设置写得进去 */
+     这里在启动后补做几次同样的瘦身，确保最终 LS 图片占用不超过 1.4MB，文字/设置写得进去 */
   [2000, 6000, 15000].forEach(function (ms) {
     setTimeout(function () { try { migrateLsBigMediaToIdb(); } catch (eRe) {} }, ms);
   });

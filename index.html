@@ -107,13 +107,13 @@ window.addEventListener("unhandledrejection",function(e){
    ① setItem 是同步的，单次写入会卡住主线程几百毫秒 → 卡顿、掉帧；
    ② iOS Safari localStorage 上限约 5MB，写满后抛 QuotaExceeded → 头像/背景图丢失；
    ③ 几 MB 的字符串常驻内存 → WebKit Jetsam 强杀 → 闪退。
-   这里在 FileReader 出口统一处理：超过 400KB 的图片缩到最长边 1440，JPEG 质量 0.82；
-   PNG 透明素材继续输出 PNG，不丢透明通道；小于 400KB 的原图原样返回。 */
+   这里在 FileReader 出口统一处理：超过 300KB 的图片缩到最长边 1080，JPEG 质量 0.75；
+   PNG 透明素材继续输出 PNG，不丢透明通道；小于 300KB 的原图原样返回。 */
 (function () {
   try {
     if (!window.FileReader || !window.HTMLCanvasElement) return;
-    var MAX_SIDE = 1440;
-    var MAX_BYTES = 400 * 1024;
+    var MAX_SIDE = 1080;
+    var MAX_BYTES = 300 * 1024;
     var nativeRead = FileReader.prototype.readAsDataURL;
 
     function emit(fr, dataUrl) {
@@ -148,7 +148,20 @@ window.addEventListener("unhandledrejection",function(e){
           canvas.width = cw;
           canvas.height = ch;
           canvas.getContext('2d').drawImage(img, 0, 0, cw, ch);
-          var out = canvas.toDataURL(type === 'image/png' ? 'image/png' : 'image/jpeg', 0.82);
+          var out = canvas.toDataURL(type === 'image/png' ? 'image/png' : 'image/jpeg', 0.75);
+          /* 二次压缩：极少数纹理复杂的图（截图/噪点照片）即便缩放后仍很大，
+             再缩到 900px / 0.6 编码一次，避免单张图就把 localStorage 配额吃掉。 */
+          try {
+            if (out && type !== 'image/png' && out.length > (700 * 1024)) {
+              var s2 = Math.min(1, 900 / Math.max(cw, ch));
+              var c2 = document.createElement('canvas');
+              c2.width = Math.max(1, Math.round(cw * s2));
+              c2.height = Math.max(1, Math.round(ch * s2));
+              c2.getContext('2d').drawImage(canvas, 0, 0, c2.width, c2.height);
+              var out2 = c2.toDataURL('image/jpeg', 0.6);
+              if (out2 && out2.length > 32 && out2.length < out.length) out = out2;
+            }
+          } catch (e2c) {}
           release();
           if (!out || out.length < 32) { done = false; retryNative(); return; }
           emit(fr, out);

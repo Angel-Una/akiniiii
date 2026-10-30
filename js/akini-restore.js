@@ -120,6 +120,23 @@
     el.style.setProperty('background-position', 'center', 'important');
     el.style.setProperty('background-repeat', 'no-repeat', 'important');
   }
+  /* 拍立得内芯是 div，图片只能以 background-image 呈现。
+     必须用 !important 内联：样式表里有 background-image 的规则，且其它脚本
+     （akini-app.js 的上传/加载逻辑）用普通 style.backgroundImage 赋值会把
+     已有声明的 important 标记清掉，导致图片被样式表覆盖 → 刷新后拍立得空白。 */
+  function applyPolaroid(url, el) {
+    try {
+      if (!el) el = document.getElementById('s1PolaroidImg');
+      if (!el || !url || typeof url !== 'string' || url.length <= 10) return;
+      var cur = el.style.backgroundImage || '';
+      if (cur && cur.indexOf(url) >= 0 && el.style.getPropertyPriority('background-image') === 'important') return;
+      el.setAttribute('data-applied-src', url);
+      el.style.setProperty('background-image', 'url("' + url + '")', 'important');
+      el.style.setProperty('background-size', 'cover', 'important');
+      el.style.setProperty('background-position', 'center', 'important');
+      el.style.setProperty('background-repeat', 'no-repeat', 'important');
+    } catch (e) {}
+  }
   var COVER_KEYS = ['akini_cover_img', 'akini_cover_bg', 'akini_s2_cover', 'cover_bg'];
   var DAY_KEYS = ['akini_day_bg', 'akini_bg_img', 'akini_anniv_bg', 'akini_s2_day_bg', 'day_bg'];
   function pickKeys(keys) {
@@ -163,19 +180,10 @@
       else pickKeysIdb(DAY_KEYS, applyBgArea);
       var photo = pickImg('akini_s1_photo');
       var elPhoto = document.getElementById('s1PolaroidImg');
-      if (photo && elPhoto && elPhoto.getAttribute('data-applied-src') !== photo) {
-        /* 撕拉片内芯是 div，图片以 background-image 呈现（与 changeS1Photo 保持一致） */
-        elPhoto.setAttribute('data-applied-src', photo);
-        elPhoto.style.backgroundImage = 'url("' + photo + '")';
-        elPhoto.style.backgroundSize = 'cover';
-        elPhoto.style.backgroundPosition = 'center';
-      } else if (!photo && elPhoto) {
+      applyPolaroid(photo, elPhoto);
+      if (!photo && elPhoto) {
         pickKeysIdb(['akini_s1_photo'], function (v) {
-          if (!v || !elPhoto) return;
-          elPhoto.setAttribute('data-applied-src', v);
-          elPhoto.style.backgroundImage = 'url("' + v + '")';
-          elPhoto.style.backgroundSize = 'cover';
-          elPhoto.style.backgroundPosition = 'center';
+          applyPolaroid(v, elPhoto);
         });
       }
       var avL = pickImg('akini_avatar_left') || pickImg('akini_s2_avatar_left') || pickImg('akini_my_avatar') || pickImg('akini_s1_avatar');
@@ -235,6 +243,34 @@
     } catch(e) {}
   }
   [300, 800, 1600, 3200].forEach(function(ms){ setTimeout(reapplyHomeBg, ms); });
+
+  /* 拍立得同样会被其它脚本的普通内联赋值降级（important 标记被清掉），
+     启动期多轮补几次：只在优先级丢失时重设，已带 important 的直接跳过。 */
+  function reapplyPolaroid() {
+    try {
+      var el = document.getElementById('s1PolaroidImg');
+      if (!el) return;
+      if (el.style.getPropertyPriority('background-image') === 'important') return;
+      var v = pickImg('akini_s1_photo') || pickImg('akini_s1_polaroid_img');
+      if (v) applyPolaroid(v, el);
+    } catch(e) {}
+  }
+  [300, 800, 1600, 3200, 6000].forEach(function(ms){ setTimeout(reapplyPolaroid, ms); });
+  window.addEventListener('akini-storage-restored', reapplyPolaroid);
+
+  /* 启动早期若 localStorage 里的联系人/会话被读成空值，core 会补建默认联系人「对方」，
+     akiniContacts 的内存缓存 d/u/v 也会把这份"临时数据"固化下来 —— 之后 IDB 对账
+     把真实数据写回 LS，界面却仍用旧缓存渲染，表现为"联系人名字被重置"。
+     对账完成后清掉缓存并重渲染聊天列表、聊天标题栏与聊天背景。 */
+  function refreshContactsAndChat() {
+    try { if (window.akiniContacts && window.akiniContacts.resetCache) window.akiniContacts.resetCache(); } catch(e) {}
+    try { if (typeof window.renderChatList === 'function') window.renderChatList(); } catch(e) {}
+    try { if (typeof window.refreshChatHeader === 'function') window.refreshChatHeader(); } catch(e) {}
+    try { if (typeof window.applyChatBackground === 'function') window.applyChatBackground(); } catch(e) {}
+    try { if (typeof window.updateChatPreview === 'function') window.updateChatPreview(); } catch(e) {}
+  }
+  ['akini-storage-restored', 'akini-img-ready'].forEach(function(evt){ window.addEventListener(evt, refreshContactsAndChat); });
+  [1200, 3000].forEach(function(ms){ setTimeout(refreshContactsAndChat, ms); });
 
   /* 清除壁纸：localStorage.removeItem 被全局拦截器挡住，这里用白名单标记真正删除，
      同时清掉 CSS 变量与 IndexedDB 镜像，避免刷新后壁纸"复活"。 */

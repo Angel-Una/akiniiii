@@ -193,7 +193,8 @@ function __akiniS1ApplyImg(slot, val) {
       if (curSrc && curSrc === val) { slot._applied = true; return true; }
     } else {
       var curBg = el.style.backgroundImage || '';
-      if (curBg && curBg.indexOf(val) >= 0) { slot._applied = true; return true; }
+      /* 只有「同一张图 + 仍是 important 内联」才跳过；普通内联会被样式表规则覆盖 */
+      if (curBg && curBg.indexOf(val) >= 0 && el.style.getPropertyPriority('background-image') === 'important') { slot._applied = true; return true; }
     }
   } catch (eEq) {}
   try { localStorage.setItem(slot.lsKey, val); } catch (e0) {}
@@ -221,7 +222,8 @@ function __akiniS1RestoreSlot(slot) {
         var _cs = _elChk.getAttribute('src') || _elChk.src || '';
         _stillOk = !!_cs && _cs.length >= 100;
       } else {
-        _stillOk = !!(String(_elChk.style.backgroundImage || '').replace(/\s/g, '').length > 12);
+        _stillOk = !!(String(_elChk.style.backgroundImage || '').replace(/\s/g, '').length > 12) &&
+          _elChk.style.getPropertyPriority('background-image') === 'important';
       }
     }
     if (_stillOk) return;
