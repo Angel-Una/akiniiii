@@ -210,8 +210,23 @@ function __akiniS1ApplyImg(slot, val) {
 }
 
 function __akiniS1RestoreSlot(slot) {
-  /* 已成功应用过的图不再重复设置，避免重进首页时反复解码 data URL 造成闪烁卡顿 */
-  if (slot._applied) return;
+  /* 已成功应用过的图不再重复设置，避免重进首页时反复解码 data URL 造成闪烁卡顿。
+     但必须先确认元素上真的还有图：其它脚本（如首页上传引擎的恢复逻辑）可能把
+     背景清掉，若只信 _applied 标记就永远补不回来（刷新后底图消失）。 */
+  if (slot._applied) {
+    var _elChk = document.getElementById(slot.elId);
+    var _stillOk = false;
+    if (_elChk) {
+      if (slot.mode === 'src') {
+        var _cs = _elChk.getAttribute('src') || _elChk.src || '';
+        _stillOk = !!_cs && _cs.length >= 100;
+      } else {
+        _stillOk = !!(String(_elChk.style.backgroundImage || '').replace(/\s/g, '').length > 12);
+      }
+    }
+    if (_stillOk) return;
+    slot._applied = false;
+  }
   /* ① localStorage（拦截层会优先返回内存镜像） */
   var v = null;
   try { v = localStorage.getItem(slot.lsKey); } catch (e0) {}

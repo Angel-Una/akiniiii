@@ -771,11 +771,10 @@ window.__akiniDefer2=function(fn){if("requestIdleCallback"in window){requestIdle
   function applyBg(elId, dataUrl) {
     var el = document.getElementById(elId);
     if (!el) return;
-    if (!validImage(dataUrl)) {
-      /* 取不到有效图片时清掉内联背景，回落到样式表默认渐变，而不是留一块深色底 */
-      try { el.style.removeProperty('background-image'); } catch (e) {}
-      return;
-    }
+    /* 取不到有效图片时什么都不做：这里绝不能 removeProperty，
+       否则启动早期存储还没从 IDB 恢复完时，会把拍立得/封面上已恢复的
+       背景图清掉，表现为「刷新后底图消失」 */
+    if (!validImage(dataUrl)) return;
     el.style.setProperty('background-image', 'url("' + dataUrl + '")', 'important');
     el.style.setProperty('background-size', 'cover', 'important');
     el.style.setProperty('background-position', 'center', 'important');
@@ -787,7 +786,18 @@ window.__akiniDefer2=function(fn){if("requestIdleCallback"in window){requestIdle
     var primary = keys[0];
     /* 内存镜像先落，保证当前会话内任何同步读取都能拿到新图 */
     try { if (window.akiniStore && window.akiniStore.memorySet) window.akiniStore.memorySet(primary, dataUrl); } catch (eM0) {}
-    try { localStorage.setItem(primary, dataUrl); } catch (e) {}
+    try {
+      localStorage.setItem(primary, dataUrl);
+    } catch (e) {
+      /* 配额写满：值留在内存副本里，保证下次启动前同会话仍可读 */
+      try {
+        var _fb = window.__akiniLsFallback || (window.__akiniLsFallback = Object.create(null));
+        _fb[primary] = dataUrl;
+      } catch (eFb) {}
+    }
+    /* 打写入时间戳：恢复侧用 akini_wts_<key> 判断谁更新，没时间戳的新图
+       有可能被存储层当成"旧值"拒绝回填，表现为刷新后底图回到更早的状态 */
+    try { if (window.__akiniImgWts && window.__akiniImgWts.stamp) window.__akiniImgWts.stamp(primary); } catch (eWt) {}
     /* 关键修复：直接写 IndexedDB 主键+备份键。
        之前只靠 akiniStore.set → 启动对账未完成时值进 _preRestorePending，
        刷新/关闭后不会再补写，图片就永久丢失（现象=刷新后图片消失）。 */
