@@ -600,54 +600,156 @@ html body #app-chat .chat-body .msg-row.system.msg-row.system .bubble:not(.trans
 
 
 <script>
-/* 全局头像同步：确保第一屏大头像始终与美化设置中的“我的头像”完全一致 */
+/* 全局头像同步：首页双头像 / 第一屏大头像 / 美化页预览 始终与「我的头像」一致。
+   头像为空时必须回退到默认线条头像，绝不留下空白圆圈；
+   头像异步恢复（IndexedDB 回填）后也要立刻重绘，不必反复重进页面。 */
+(function () {
+  var DEFAULT_AV = 'data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%20viewBox%3D%220%200%2080%2080%22%3E%3Crect%20width%3D%2280%22%20height%3D%2280%22%20fill%3D%22%23f7f8fa%22/%3E%3Ccircle%20cx%3D%2240%22%20cy%3D%2229%22%20r%3D%2214%22%20fill%3D%22none%22%20stroke%3D%22%235a5e66%22%20stroke-width%3D%221.5%22/%3E%3Cpath%20d%3D%22M12%2076c4-17%2014-26%2028-26s24%209%2028%2026%22%20fill%3D%22none%22%20stroke%3D%22%235a5e66%22%20stroke-width%3D%221.5%22%20stroke-linecap%3D%22round%22/%3E%3C/svg%3E';
 
-    // 防“三号闪现”：首屏双头像先用已存本地头像立刻填，绝不闪默认线条人。
-    // 若该 key 曾被打过时间戳“wts 侧车”标记，说明它确实是用户的真实头像，则用。
-    function _applyHomeAvatar(){
-      try{
-        var taAv = localStorage.getItem("akini_ta_avatar") || localStorage.getItem("akini_icity_ta_avatar") || "";
-        var myAv = localStorage.getItem("akini_my_avatar") || localStorage.getItem("akini_avatar_left") || localStorage.getItem("akini_s1_avatar") || "";
-        var left = document.getElementById("avatarLeftImg"), right = document.getElementById("avatarRightImg");
-        var setAv = function(img, v){ if(img && v){ img.src=v; img.style.display="block"; } };
-        setAv(left, myAv); setAv(right, taAv);
-      }catch(e){}
-    }
-    if(document.readyState==="loading") document.addEventListener("DOMContentLoaded", _applyHomeAvatar);
-    else _applyHomeAvatar();
-window.syncGlobalMyAvatar = function() {
-  try {
-    var myAv = localStorage.getItem('akini_my_avatar') || localStorage.getItem('akini_avatar_left') || localStorage.getItem('akini_s1_avatar') || localStorage.getItem('avatarLeft') || (window.__akiniAvatarCache && window.__akiniAvatarCache.my);
-    var s1Av = document.getElementById('s1AvatarImg');
-    if (s1Av && myAv) {
-      s1Av.src = myAv;
-    }
-    // 同步更新双人头像左位与美化页预览
-    var avLeft = document.getElementById('avatarLeft');
-    if (avLeft && myAv) {
-      var img = avLeft.querySelector('img');
-      if (img) img.src = myAv;
-    }
-    var prev = document.getElementById('myAvatarPreviewBeautify');
-    if (prev && myAv) {
-      var pImg = prev.querySelector('img');
-      if (pImg) pImg.src = myAv;
-    }
-  } catch(e){}
-};
-
-// 监听美化设置中头像更新
-document.addEventListener('DOMContentLoaded', function() {
-  window.syncGlobalMyAvatar();
-  // 观察 previewAvatarLeft 的变化
-  var observer = new MutationObserver(function() {
-    window.syncGlobalMyAvatar();
-  });
-  var pal = document.getElementById('previewAvatarLeft');
-  if (pal) {
-    observer.observe(pal, { attributes: true, attributeFilter: ['style'] });
+  function _clean(v){ return (typeof v === 'string' && v.trim() && v !== 'null' && v !== 'undefined') ? v.trim() : ''; }
+  function _usable(v){
+    v = _clean(v);
+    if (!v) return '';
+    if (v.charAt(0) === '<') return '';
+    try { if (window.__akiniIsDefaultAvatarToken && window.__akiniIsDefaultAvatarToken(v)) return ''; } catch (e) {}
+    if (v.indexOf('data:') === 0 || /^https?:/i.test(v) || v.length > 200) return v;
+    return '';
   }
-});
+  function _myAvatar(){
+    try {
+      return _usable(localStorage.getItem('akini_my_avatar')) ||
+             _usable(localStorage.getItem('akini_avatar_left')) ||
+             _usable(localStorage.getItem('akini_s1_avatar')) ||
+             _usable(localStorage.getItem('akini_icity_my_avatar')) ||
+             _usable(window.__akiniAvatarCache && window.__akiniAvatarCache.my);
+    } catch (e) { return ''; }
+  }
+  function _taAvatar(){
+    var v = '';
+    try {
+      var c = window.akiniContacts;
+      if (c) {
+        var u = c.getHomeAvatars ? c.getHomeAvatars() : null;
+        var t = (u && u.right && c.getChatTarget) ? c.getChatTarget(u.right) : null;
+        if (t) v = _usable(t.avatar);
+        if (!v && c.getContacts) {
+          var list = c.getContacts() || [];
+          for (var i = 0; i < list.length; i++) {
+            var a = _usable(list[i] && list[i].avatar);
+            if (a) { v = a; break; }
+          }
+        }
+      }
+    } catch (e) {}
+    if (!v) {
+      try {
+        v = _usable(localStorage.getItem('akini_ta_avatar')) ||
+            _usable(localStorage.getItem('akini_avatar_right')) ||
+            _usable(localStorage.getItem('akini_icity_ta_avatar')) ||
+            _usable(window.__akiniAvatarCache && window.__akiniAvatarCache.ta);
+      } catch (e2) {}
+    }
+    return v;
+  }
+  function _setCell(cellId, src){
+    var cell = document.getElementById(cellId);
+    if (!cell || !src) return;
+    var img = cell.querySelector('img');
+    if (!img) {
+      img = document.createElement('img');
+      img.setAttribute('alt', '');
+      img.style.cssText = 'width:100%;height:100%;object-fit:cover;border-radius:50%;display:block';
+      cell.appendChild(img);
+    }
+    img.src = src;
+    img.style.display = 'block';
+  }
+  function _setPreview(src){
+    var prev = document.getElementById('myAvatarPreviewBeautify');
+    if (!prev || !src) return;
+    var img = prev.querySelector('img');
+    if (!img) {
+      prev.innerHTML = '';
+      img = document.createElement('img');
+      img.style.cssText = 'width:100%;height:100%;object-fit:cover;border-radius:50%;display:block';
+      prev.appendChild(img);
+    }
+    img.src = src;
+  }
+  function _setS1(src){
+    var e = document.getElementById('s1AvatarImg');
+    if (e) { e.src = src; return; }
+    var c = document.getElementById('s1AvatarCircle');
+    if (c) c.innerHTML = '<img id="s1AvatarImg" src="' + src + '" style="width:100%;height:100%;object-fit:cover;border-radius:50%;">';
+  }
+
+  /* 立即把头像应用到三个界面；newMy 传新选的「我的头像」dataURL 可强制刷新 */
+  window.__akiniApplyHomeAvatars = function(newMy){
+    try {
+      var my = _usable(newMy) || _myAvatar();
+      var ta = _taAvatar();
+      var left = my || DEFAULT_AV;
+      var right = ta || DEFAULT_AV;
+      try {
+        if (typeof window.isSwapped === 'function' && window.isSwapped()) { var tmp = left; left = right; right = tmp; }
+      } catch (e) {}
+      _setCell('avatarLeft', left);
+      _setCell('avatarRight', right);
+      _setS1(my || DEFAULT_AV);
+      _setPreview(my || DEFAULT_AV);
+    } catch (e) {}
+  };
+
+  window.syncGlobalMyAvatar = function(){
+    window.__akiniApplyHomeAvatars('');
+  };
+  // 兼容旧调用
+  window._applyHomeAvatar = function(){ window.__akiniApplyHomeAvatars(''); };
+
+  /* 选完头像后的强制刷新：core 的 En() 有一个并发守卫 __akiniSyncingAvatars，
+     只要中途抛错就会永远停在 true，之后所有 En() 都被直接吞掉，
+     表现为「换头像不生效、要重进两三次」。这里强制解锁并立即重绘。 */
+  window.__akiniForceApplyAvatars = function(newMy){
+    try { window.__akiniSyncingAvatars = false; window.__akiniAvatarNeedsRefresh = false; } catch (e) {}
+    window.__akiniApplyHomeAvatars(newMy);
+    // 异步渲染/IndexedDB 回填会再次覆盖，错峰补几次
+    var delays = [80, 240, 600, 1200];
+    for (var i = 0; i < delays.length; i++) {
+      (function(d){ setTimeout(function(){ window.__akiniApplyHomeAvatars(newMy); }, d); })(delays[i]);
+    }
+  };
+
+  // 兜底看门狗：守卫卡死时自动解锁并补一次重绘（En 是同步执行，不会误伤正常流程）
+  setInterval(function(){
+    if (window.__akiniSyncingAvatars) {
+      window.__akiniSyncingAvatars = false;
+      window.__akiniApplyHomeAvatars('');
+    }
+  }, 2000);
+
+  function _bootSync(){
+    window.__akiniApplyHomeAvatars('');
+    var tries = 0;
+    var timer = setInterval(function(){
+      window.__akiniApplyHomeAvatars('');
+      tries++;
+      // 头像从 IndexedDB 异步恢复后自动补上，最多尝试 8 次
+      if ((_myAvatar() && _taAvatar()) || tries >= 8) clearInterval(timer);
+    }, 600);
+  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', _bootSync);
+  else _bootSync();
+  window.addEventListener('load', function(){ window.__akiniApplyHomeAvatars(''); });
+  window.addEventListener('pageshow', function(){ window.__akiniApplyHomeAvatars(''); });
+  document.addEventListener('visibilitychange', function(){ if (!document.hidden) window.__akiniApplyHomeAvatars(''); });
+
+  // 观察 previewAvatarLeft 的变化（旧逻辑保留）
+  document.addEventListener('DOMContentLoaded', function() {
+    var observer = new MutationObserver(function() { window.syncGlobalMyAvatar(); });
+    var pal = document.getElementById('previewAvatarLeft');
+    if (pal) observer.observe(pal, { attributes: true, attributeFilter: ['style'] });
+  });
+})();
 </script>
 
 
@@ -1453,8 +1555,8 @@ window.AKINI_VERSION = "";
         <div class="top-card" id="topCard"><div class="cover-img" id="coverAreaMain" style="position:relative;overflow:hidden;cursor:pointer" tabindex="0" title="点击直接更换首页封面图">
         <input type="file" accept="image/*" class="akini-hidden-input" id="s2CoverInputDirect" />
       </div><div class="dual-avatar-wrap" id="dualAvatarWrap">
-        <div class="avatar-left" id="avatarLeft" style="overflow:hidden;cursor:default;" title="左侧头像（可在设置或联系人详情中更换）"><img src="" alt="" style="width:100%;height:100%;object-fit:cover;border-radius:50%;display:none" id="avatarLeftImg" onerror="this.style.display='none'" /></div>
-        <div class="avatar-right" id="avatarRight" style="overflow:hidden;cursor:default;" title="右侧联系人头像（可在设置或联系人详情中更换）"><img src="" alt="" style="width:100%;height:100%;object-fit:cover;border-radius:50%;display:none" id="avatarRightImg" onerror="this.style.display='none'" /></div>
+        <div class="avatar-left" id="avatarLeft" style="overflow:hidden;cursor:default;" title="左侧头像（可在设置或联系人详情中更换）"><img src="data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%20viewBox%3D%220%200%2080%2080%22%3E%3Crect%20width%3D%2280%22%20height%3D%2280%22%20fill%3D%22%23f7f8fa%22/%3E%3Ccircle%20cx%3D%2240%22%20cy%3D%2229%22%20r%3D%2214%22%20fill%3D%22none%22%20stroke%3D%22%235a5e66%22%20stroke-width%3D%221.5%22/%3E%3Cpath%20d%3D%22M12%2076c4-17%2014-26%2028-26s24%209%2028%2026%22%20fill%3D%22none%22%20stroke%3D%22%235a5e66%22%20stroke-width%3D%221.5%22%20stroke-linecap%3D%22round%22/%3E%3C/svg%3E" alt="" style="width:100%;height:100%;object-fit:cover;border-radius:50%;display:block" id="avatarLeftImg" onerror="this.style.display='none'" /></div>
+        <div class="avatar-right" id="avatarRight" style="overflow:hidden;cursor:default;" title="右侧联系人头像（可在设置或联系人详情中更换）"><img src="data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%20viewBox%3D%220%200%2080%2080%22%3E%3Crect%20width%3D%2280%22%20height%3D%2280%22%20fill%3D%22%23f7f8fa%22/%3E%3Ccircle%20cx%3D%2240%22%20cy%3D%2229%22%20r%3D%2214%22%20fill%3D%22none%22%20stroke%3D%22%235a5e66%22%20stroke-width%3D%221.5%22/%3E%3Cpath%20d%3D%22M12%2076c4-17%2014-26%2028-26s24%209%2028%2026%22%20fill%3D%22none%22%20stroke%3D%22%235a5e66%22%20stroke-width%3D%221.5%22%20stroke-linecap%3D%22round%22/%3E%3C/svg%3E" alt="" style="width:100%;height:100%;object-fit:cover;border-radius:50%;display:block" id="avatarRightImg" onerror="this.style.display='none'" /></div>
       </div><div class="subtitle" id="subtitleText">你在左边 我紧靠右</div></div>
 
     
