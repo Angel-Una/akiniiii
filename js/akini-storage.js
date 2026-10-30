@@ -18,39 +18,33 @@
       for (var idx = 0; idx < totalKeys; idx++) {
         try {
           var k = origKey ? origKey.call(rawLS, idx) : rawLS.key(idx);
-          if (k && String(k).indexOf('akini_') === 0) {
-            keysToCheck.push(k);
-            try { var tv = origGet ? origGet.call(rawLS, k) : rawLS.getItem(k); if (tv) totalBytes += tv.length; } catch (eL) {}
-          }
+          /* 只收键名：旧代码在这里把每个键的值都同步读一遍（最多 5MB 字符串），
+             启动时白读一次纯属浪费主线程 —— 需要值的地方下面按需读。 */
+          if (k && String(k).indexOf('akini_') === 0) keysToCheck.push(k);
         } catch (eK) {}
       }
       keysToCheck.forEach(function (k) {
         try {
+          /* syy 模型：启动瘦身只处理图片残留。
+             文本类键写入时（akiniSet）已经镜像到 IDB，这里再 memSet + queueIdbWrite
+             等于每启动一次就把几十 MB 文本重复写库一遍（旧代码还连跑 4 次），
+             低端机重进时直接卡死/闪退 —— 已删除。
+             图片键先按名字判断，未命中的键连字符串都不读。 */
+          if (!isImgKey(k)) return;
           var v = origGet ? origGet.call(rawLS, k) : rawLS.getItem(k);
           if (!v) return;
           var len = v.length || 0;
-          if (isImgKey(k) || len > (40 * 1024)) {
-            // 存入内存 Map，供前端同步读写无感命中
-            memSet(k, v);
-            // 写入 IndexedDB 大容量数据库
-            queueIdbWrite(k, v);
-            if (isImgKey(k)) _stampImgKey(k);
-            // 首页核心底图/头像/关键文本/聊天记录/聊天背景：无论大小一律保留在 LS
-            // 这些键是同步读取的唯一数据源，删了就会导致刷新后界面渲染为默认（被重置）
-            // 此前存在 len > 1.8MB 的漏洞，导致超长聊天记录/带图背景被误删 —— 已修复
-            var isEssential = _isEssentialTextKey(k) || _keepInLs(k);
-            /* syy 模型对齐：图片一律不留在 localStorage —— 主存储就是 IndexedDB，
-               内存镜像 + IDB 是图片的唯一权威副本。LS 只放文字/设置类数据，
-               这样图片再多也挤不掉联系人、聊天背景、聊天记录这些文字键。
-               （之前图片占用 1.4MB+ 配额，文字写不进去 → 刷新后全部"重置"） */
-            if (isImgKey(k) || (!isEssential && totalBytes > (3500 * 1024))) {
-              /* 删 LS 之前先同步写一份 IDB，避免"删完还没落盘就被杀进程"导致丢数据 */
-              try { var _IDBm = getIDB(); if (_IDBm && _IDBm.set) _IDBm.set(k, v); } catch (eM0) {}
-              if (origRemove) origRemove.call(rawLS, k); else rawLS.removeItem(k);
-              migrated++;
-              freedBytes += len;
-            }
-          }
+          memSet(k, v);        // 内存镜像，前端同步读写无感命中
+          queueIdbWrite(k, v); // IndexedDB 大容量主存储
+          _stampImgKey(k);
+          /* syy 模型对齐：图片一律不留在 localStorage —— 主存储就是 IndexedDB，
+             内存镜像 + IDB 是图片的唯一权威副本。LS 只放文字/设置类数据，
+             这样图片再多也挤不掉联系人、聊天背景、聊天记录这些文字键。
+             删 LS 之前先同步写一份 IDB，避免"删完还没落盘就被杀进程"导致丢数据。 */
+          try { var _IDBm = getIDB(); if (_IDBm && _IDBm.set) _IDBm.set(k, v); } catch (eM0) {}
+          if (origRemove) origRemove.call(rawLS, k); else rawLS.removeItem(k);
+          migrated++;
+          freedBytes += len;
         } catch (eMig) {}
       });
       /* 关键修复：LS 里的图片总量限制在 1.4MB。用户图片全部保留 IDB + 内存副本，
@@ -714,8 +708,37 @@
           return k && ks.indexOf('akini_') === 0 && ks.indexOf('_backup') < 0 && !HIGH_FREQ_RE.test(ks);
         });
         var i = 0;
+        /* 文本/设置/聊天先恢复，图片（几十 MB dataURL）延后到空闲时段水合。
+           旧代码把图片和文本混在同一批里恢复：首屏渲染被几十 MB 图片的反序列化
+           抢占主线程，安卓切后台被系统重载后重进就是几秒白屏甚至直接卡崩。 */
+        var textTargets = [], imgTargets = [];
+        targets.forEach(function (k) { if (isImgKey(k)) imgTargets.push(k); else textTargets.push(k); });
+        var _imgRestoreStarted = false;
+        /* 图片空闲水合：只进内存（受预算）+ 清 LS 残留，不参与对账仲裁 */
+        function restoreImagesIdle() {
+          var j = 0;
+          (function step() {
+            if (j >= imgTargets.length) return;
+            var ibatch = imgTargets.slice(j, j + 2);
+            j += 2;
+            ibatch.forEach(function (k) {
+              idbGet(k, function (v) {
+                try {
+                  if (v == null || v === '' || v === 'null') return;
+                  _reconciledKeys[k] = 1;
+                  var cur = memGet(k);
+                  if (typeof cur === 'string' && typeof v === 'string' && cur.length > v.length) return;
+                  if (typeof v === 'string' && _bigMemUsed + v.length <= BIG_MEM_BUDGET) { memSet(k, v); _bigMemUsed += v.length; }
+                  else window.__akiniDeferredKeys[k] = 1;
+                  lsRemoveRaw(k);
+                } catch (eI) {}
+              });
+            });
+            setTimeout(step, 200);
+          })();
+        }
         (function nextBatch() {
-          if (i >= targets.length) {
+          if (i >= textTargets.length) {
             _restoring = false;
             if (!_restored) {
               _restored = true;
@@ -740,11 +763,16 @@
               /* 修复单人模块背景图/拍立得/头像灰白不显示：启动早期大图从 LS 迁移到 IDB，
                  同步读取必为空；对账恢复完成后重新渲染首屏大图，确保不残留灰白 */
               try { if (typeof window.loadS1SavedData === 'function') window.loadS1SavedData(); } catch (eLS) {}
-              console.log('[存储] 启动恢复完成，共同步', targets.length, '个键，大键驻留', Math.round(_bigMemUsed / 1024), 'KB');
+              console.log('[存储] 启动恢复完成，共同步', textTargets.length, '个键，大键驻留', Math.round(_bigMemUsed / 1024), 'KB');
+              /* 图片放到首屏渲染之后慢慢来，不阻塞任何门闩 */
+              if (!_imgRestoreStarted && imgTargets.length) {
+                _imgRestoreStarted = true;
+                setTimeout(function () { try { restoreImagesIdle(); } catch (eImg) {} }, 1200);
+              }
             }
             return;
           }
-          var batch = targets.slice(i, i + _BOOT_BATCH);
+          var batch = textTargets.slice(i, i + _BOOT_BATCH);
           i += _BOOT_BATCH;
           var pending = batch.length;
           batch.forEach(function (k) {
@@ -1195,10 +1223,9 @@
   /* 启动第一时间把大图迁到内存+IDB 并把 LS 图片总量压到 1.4MB（此时所有状态变量已就绪） */
   try { migrateLsBigMediaToIdb(); } catch (eMigInit) {}
   /* 启动期有其它模块（core 的图片写入/背景应用）会把图重新写回 LS 把配额占满，
-     这里在启动后补做几次同样的瘦身，确保最终 LS 图片占用不超过 1.4MB，文字/设置写得进去 */
-  [2000, 6000, 15000].forEach(function (ms) {
-    setTimeout(function () { try { migrateLsBigMediaToIdb(); } catch (eRe) {} }, ms);
-  });
+     启动后补做一次同样的瘦身即可。旧代码在 2s/6s/15s 各跑一遍全量扫描，
+     等于启动阶段反复做三次全量 IO —— 是"切后台重进就卡崩"的直接原因，已改为单次。 */
+  setTimeout(function () { try { migrateLsBigMediaToIdb(); } catch (eRe) {} }, 2000);
   /* 启动第一时间瘦身 localStorage（清冗余媒体备份 + 超大残留），缓解配额爆满导致的写入失败与闪退 */
   try { startupSlim(); } catch (eS) {}
   // 无 IDB 或 IDB 不支持 keys 时立即标记恢复完成，避免写入一直暂存 _preRestorePending

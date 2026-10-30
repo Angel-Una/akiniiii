@@ -21,8 +21,8 @@
 
   var LS_KEY = '__akini_critical_snapshot_ls';
   var IDB_KEY = '__akini_critical_snapshot_idb';
-  var LS_MAX = 900 * 1024;          // localStorage 小快照上限（akini 的 LS 还要放业务数据，快照不宜过大）
-  var IDB_MAX = 24 * 1024 * 1024;    // IndexedDB 全量快照上限
+  var LS_MAX = 400 * 1024;          // localStorage 小快照上限（syy 的 critical 也只放核心数据；写 LS 是同步的，越大越卡）
+  var IDB_MAX = 8 * 1024 * 1024;     // IndexedDB 全量快照上限（图片已不进快照，8MB 足够覆盖全部文字数据）
   var CHAT_TAIL = 300;               // 单会话聊天记录最多保留最后 300 条
   var IMG_LS_MAX = 400 * 1024;       // 大于该体积的图片不进 LS 小快照（IDB 快照仍保留）
 
@@ -113,6 +113,10 @@
         return;
       }
       var sv = trimChat(k, v);
+      /* syy 对齐：critical 快照只存核心文字数据，图片一律不进快照。
+         图片的权威副本本来就在 IndexedDB 原键里，再复制一份进快照，
+         会让每次签名变化都重新 stringify 十几 MB 并同步写 LS —— 切后台重进必卡。 */
+      if (isImg(k)) return;
       /* 带图朋友圈/iCity/邮件这类大文本，原始副本已经在 IndexedDB 里，
          再复制一份进 20s 周期快照只会让每次 stringify 多背几 MB（低端机卡顿/闪退主因）。
          超过 900KB 的直接不参与快照，交付权威副本仍由 IDB 原键承担。 */
@@ -362,11 +366,31 @@
     };
   } catch (eHook) {}
 
-  // ---- 运行期快照：数据变化后 20s 内落盘；切后台/关闭页面立即落盘 ----
-  try { setInterval(function () { checkSnapshot(false); }, 20000); } catch (eT1) {}
+  // ---- 运行期快照：仅在前台时每 20s 检查一次变化 ----
   try {
-    document.addEventListener('visibilitychange', function () { if (document.hidden) checkSnapshot(false); });
-    window.addEventListener('pagehide', function () { checkSnapshot(false); });
+    setInterval(function () {
+      /* 后台不做快照：切后台/隐藏瞬间做全量 JSON.stringify 是安卓被杀的直接原因。
+         而且真正的数据在 akiniSet 写入时就已落 localStorage + IndexedDB（大键立即 flush），
+         快照只是兜底，不需要在冻结窗口里抢主线程。 */
+      if (document.hidden) return;
+      checkSnapshot(false);
+    }, 20000);
+  } catch (eT1) {}
+  function flushStore() {
+    try {
+      var s = store();
+      if (!s) return;
+      if (typeof s.flushIdb === 'function') s.flushIdb();
+      else if (typeof s.flushIdbQueue === 'function') s.flushIdbQueue();
+    } catch (e) {}
+  }
+  try {
+    /* 页面隐藏时只落盘（IndexedDB 队列），不再构建全量快照 */
+    document.addEventListener('visibilitychange', function () {
+      if (document.hidden) flushStore();
+      else checkSnapshot(false);
+    });
+    window.addEventListener('pagehide', flushStore);
   } catch (eT2) {}
 
   // ---- 对外接口 ----
