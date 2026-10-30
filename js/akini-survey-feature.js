@@ -1017,10 +1017,12 @@ window.__akiniDefer=function(fn){if("requestIdleCallback"in window){requestIdleC
     var isTaSurvey = (survey.direction === "receive");
     var ctName = targetName || survey.senderName || survey.targetName || "对方";
     var title = "";
+    /* 名字只做一次转义：下面 rt(title) 会统一转义，这里再 rt(ctName) 会导致
+       联系人名字里的 > / < / & 变成 &amp;gt; 之类的乱码 */
     if(isTaSurvey){
-      title = isReply ? "我回答了问卷" : (rt(ctName) + "邀请你回答问卷");
+      title = isReply ? "我回答了问卷" : (ctName + "邀请你回答问卷");
     } else {
-      title = isReply ? (rt(ctName) + "回答了问卷") : ("邀请" + rt(ctName) + "回答问卷");
+      title = isReply ? (ctName + "回答了问卷") : ("邀请" + ctName + "回答问卷");
     }
     var qText = (survey.title || "").trim() || "问卷";
     var qs = (survey.questions || []).filter(function(q){ return (q.text || "").trim(); });

@@ -981,6 +981,21 @@ window.__akiniDefer2=function(fn){if("requestIdleCallback"in window){requestIdle
     }
   }
 
+  /* 系统通知只显示真正的消息正文，不显示引用消息里的原文，避免通知里出现一大段引用内容 */
+  function textNoQuote(row) {
+    if (!row) return '';
+    try {
+      var copy = row.cloneNode(true);
+      var qs = copy.querySelectorAll('.quote-bubble');
+      for (var i = 0; i < qs.length; i++) {
+        if (qs[i].parentNode) qs[i].parentNode.removeChild(qs[i]);
+      }
+      return (copy.textContent || '').replace(/\s+/g, ' ').trim();
+    } catch (e) {
+      return ((row.textContent) || '').replace(/\s+/g, ' ').trim();
+    }
+  }
+
   /* 取会话里最后一条「对方」消息的文字，纯文本 < 80 字 */
   function lastOtherText(cid) {
     try {
@@ -992,7 +1007,7 @@ window.__akiniDefer2=function(fn){if("requestIdleCallback"in window){requestIdle
       var box = document.createElement('div');
       box.innerHTML = html.slice(at);
       var row = box.querySelector('.msg-row');
-      return ((row && row.textContent) || '').replace(/\s+/g, ' ').trim().slice(0, 80);
+      return textNoQuote(row).slice(0, 80);
     } catch (e) {
       return '';
     }
@@ -1026,7 +1041,7 @@ window.__akiniDefer2=function(fn){if("requestIdleCallback"in window){requestIdle
           var tmp = document.createElement('div');
           tmp.innerHTML = html;
           var row = tmp.querySelector('.msg-row');
-          notify(cid, ((row && row.textContent) || '').replace(/\s+/g, ' ').trim());
+          notify(cid, textNoQuote(row));
         }
       } catch (e) {}
       return orig.apply(this, arguments);
