@@ -121,9 +121,11 @@
          再复制一份进 20s 周期快照只会让每次 stringify 多背几 MB（低端机卡顿/闪退主因）。
          超过 900KB 的直接不参与快照，交付权威副本仍由 IDB 原键承担。 */
       if (HOT_SKIP_RE.test(k) && sv.length > 900 * 1024) return;
-      if (!sv || sv.length > IDB_MAX / 2) return;
-      /* 总量预算：避免多会话超大聊天记录把 JSON.stringify 撑爆低端机内存 */
-      if (total + sv.length > IDB_MAX) return;
+      if (!sv || sv.length > 512 * 1024) return;
+      /* 总量预算：对齐 syy 的 critical 小快照，避免多会话超大聊天记录把
+         JSON.stringify 撑爆低端机内存。快照只是启动快恢复 + 墓碑仲裁的兜底，
+         全量数据已由 akiniSet 逐键落 IndexedDB，这里不需要几 MB 的大快照。 */
+      if (total + sv.length > 1024 * 1024) return;
       total += sv.length;
       d[k] = sv;
       t[k] = (prev && prev.d && prev.d[k] === sv && prev.t && prev.t[k]) ? prev.t[k] : now;
@@ -366,16 +368,11 @@
     };
   } catch (eHook) {}
 
-  // ---- 运行期快照：仅在前台时每 20s 检查一次变化 ----
-  try {
-    setInterval(function () {
-      /* 后台不做快照：切后台/隐藏瞬间做全量 JSON.stringify 是安卓被杀的直接原因。
-         而且真正的数据在 akiniSet 写入时就已落 localStorage + IndexedDB（大键立即 flush），
-         快照只是兜底，不需要在冻结窗口里抢主线程。 */
-      if (document.hidden) return;
-      checkSnapshot(false);
-    }, 20000);
-  } catch (eT1) {}
+  // ---- 运行期快照：对齐 syy，取消前台周期性全量快照 ----
+  /* syy 只在切后台/关闭页时做小体积 critical 备份，从不在前台每 20s 全量 stringify。
+     akini 之前每 20s 调 sigOf() 读全量 localStorage + 变化时 buildSnap+JSON.stringify，
+     是低端机「用着用着突然卡崩」的直接原因。全量数据已由 akiniSet 逐键落 IndexedDB，
+     快照仅作启动快恢复 + 墓碑仲裁兜底，由显式删除(_snapshotCritical(true))和切后台时触发。 */
   function flushStore() {
     try {
       var s = store();
@@ -385,10 +382,11 @@
     } catch (e) {}
   }
   try {
-    /* 页面隐藏时只落盘（IndexedDB 队列），不再构建全量快照 */
+    /* 页面隐藏时：先落 IndexedDB 队列（真正的数据落盘），再做一份小快照兜底。
+       快照现已封顶 1MB（单键 512KB），stringify 开销与 syy 的 _backupCriticalData 同级，
+       不会在冻结窗口里把主线程卡死。回前台不再重建快照——全量数据由 IDB 逐键权威承载。 */
     document.addEventListener('visibilitychange', function () {
-      if (document.hidden) flushStore();
-      else checkSnapshot(false);
+      if (document.hidden) { flushStore(); try { takeSnapshot(false); } catch (e) {} }
     });
     window.addEventListener('pagehide', flushStore);
   } catch (eT2) {}
