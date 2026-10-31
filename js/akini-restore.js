@@ -603,11 +603,21 @@
     } catch (e) {}
   }
 
-  window.addEventListener('akini-storage-restored', function () { setTimeout(repair, 600); });
-  window.addEventListener('akini-img-ready', function () { setTimeout(repair, 600); });
-  window.addEventListener('pageshow', function () { setTimeout(repair, 300); });
-  document.addEventListener('visibilitychange', function () {
-    if (!document.hidden) setTimeout(repair, 300);
-  });
-  [1200, 2500, 4500, 8000].forEach(function (ms) { setTimeout(repair, ms); });
+  /* 单一触发入口：原来 3 个事件 + 4 个定时器共 7 条链各自调用 repair，
+     互相覆盖还会在后台重复重绘。现在统一走一个去抖调度，只跑一次。 */
+  var _repairTimer = 0;
+  function scheduleRepair(delay) {
+    if (document.hidden) return;
+    if (_repairTimer) return;
+    _repairTimer = setTimeout(function () {
+      _repairTimer = 0;
+      if (document.hidden) return;
+      repair();
+    }, delay > 0 ? delay : 0);
+  }
+  window.addEventListener('akini-storage-restored', function () { scheduleRepair(600); });
+  window.addEventListener('akini-img-ready', function () { scheduleRepair(600); });
+  window.addEventListener('pageshow', function () { scheduleRepair(300); });
+  document.addEventListener('visibilitychange', function () { if (!document.hidden) scheduleRepair(300); });
+  setTimeout(function () { scheduleRepair(0); }, 3000);
 })();
