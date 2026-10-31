@@ -133,14 +133,50 @@ if (window.__navBack) { window.__navBack._akini = true; }
     try{
       window.hideAll();
 
+      /* 单人模式：点微信直接进入唯一联系人（默认 TA）的聊天界面，不出现会话列表/通讯录等任何中间界面 */
       if(app === "chat-list"){
-        var dc = window.__akiniDefaultContact && window.__akiniDefaultContact();
-        if(dc && window.openChat){
-          window.akiniContacts && window.akiniContacts.setActiveChatId && window.akiniContacts.setActiveChatId(dc.id);
-          window.openChat(dc.id);
-          return;
-        }
-        __akiniShowAppContainer("chat-list");
+        var _openChatWithDefault = function(){
+          var cid = null;
+          try {
+            var dc = window.__akiniDefaultContact && window.__akiniDefaultContact();
+            cid = dc && dc.id;
+          } catch(e){}
+          if(!cid){
+            try { cid = window.akiniContacts && window.akiniContacts.getActiveChatId && window.akiniContacts.getActiveChatId(); } catch(e){}
+          }
+          if(!cid){
+            try {
+              var raw = localStorage.getItem("akini_contacts");
+              var arr = raw ? JSON.parse(raw) : [];
+              var d = arr && ((arr.filter(function(x){ return x && x.isDefault; })[0]) || arr[0]);
+              cid = d && d.id;
+            } catch(e){}
+          }
+          if(!cid || !window.openChat) return false;
+          try { window.akiniContacts && window.akiniContacts.setActiveChatId && window.akiniContacts.setActiveChatId(cid); } catch(e){}
+          try { window.openChat(cid); } catch(e){ return false; }
+          return true;
+        };
+        if(_openChatWithDefault()) return;
+        /* 联系人尚未恢复完成：先铺聊天容器，等数据就绪后立刻进聊天，绝不停在会话列表 */
+        __akiniShowAppContainer("chat");
+        var _waitDone = false;
+        var _waitEvents = ['akini-storage-restored','akini-contacts-restored','akini-cloud-restored','load','pageshow','focus'];
+        var _waitCleanup = function(){
+          _waitEvents.forEach(function(evt){ try { window.removeEventListener(evt, _waitTry); } catch(e){} });
+        };
+        var _waitTry = function(){
+          if(_waitDone) return;
+          try {
+            if(_openChatWithDefault()){ _waitDone = true; _waitCleanup(); }
+          } catch(e){}
+        };
+        _waitEvents.forEach(function(evt){
+          try { window.addEventListener(evt, _waitTry); } catch(e){}
+        });
+        setTimeout(_waitTry, 300);
+        setTimeout(_waitTry, 900);
+        setTimeout(_waitTry, 2000);
         return;
       }
 
