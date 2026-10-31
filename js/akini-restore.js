@@ -228,6 +228,12 @@
   /* 存储层对账完成后再补一轮（IDB → LS 回填发生在首屏之后，晚到的数据必须重新上屏） */
   window.addEventListener('akini-storage-restored', function(){ try { restoreAllImagesAndConfig(); } catch(e) {} });
   [600, 1800, 4000, 8000].forEach(function(ms){ setTimeout(function(){ try { restoreAllImagesAndConfig(); } catch(e) {} }, ms); });
+  /* 从后台切回前台时再补一轮：系统可能在此期间清掉/延迟写入图片，
+     或者 iOS 已把页面重载——重新上屏一次，避免"要再进一次才显示"。 */
+  document.addEventListener('visibilitychange', function(){
+    if (document.hidden) return;
+    setTimeout(function(){ try { restoreAllImagesAndConfig(); } catch(e) {} }, 300);
+  });
 
   /* core 的 ct("akini_home_bg") 会在启动后异步再写一次 background-image，
      而且不带 !important，会把上面恢复的壁纸覆盖成不生效的内联声明。

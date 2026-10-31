@@ -5205,7 +5205,16 @@ if (wipeBtn) wipeBtn.onclick = function () {
     } catch (e) {}
     return false;
   }
-  function _msgCount(v) { try { var a = JSON.parse(v); return Array.isArray(a) ? a.length : 0; } catch (e) { return 0; } }
+  /* 聊天记录是消息 HTML，不是 JSON 数组：原来 JSON.parse 恒失败返回 0，
+     云端更完整的记录永远判不出来。改为统计 msg-row 行数。 */
+  function _msgCount(v) {
+    try {
+      if (typeof v !== "string" || !v) return 0;
+      if (v.charAt(0) === "[") { var a = JSON.parse(v); return Array.isArray(a) ? a.length : 0; }
+      var m = v.match(/<div[^>]*class="msg-row/g);
+      return m ? m.length : 0;
+    } catch (e) { return 0; }
+  }
   /* 删除墓碑：用户刚清空/删除某个键后，云端旧数据不能又把它拉回来 */
   function _isDeletedLocally(k, cloudAt) {
     try {

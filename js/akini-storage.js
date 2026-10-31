@@ -49,6 +49,10 @@
           memSet(k, v);        // 内存镜像，前端同步读写无感命中
           queueIdbWrite(k, v); // IndexedDB 大容量主存储
           _stampImgKey(k);
+          /* 关键视觉图片（头像/壁纸/聊天背景/图标）体积不大时保留在 localStorage：
+             刷新后同步就能读到，不会出现「切后台重进图片先全没了、过一会才回来」。
+             大图仍只留 IndexedDB，由异步恢复补上。 */
+          if (_isEssentialImgKey(k) && len <= (400 * 1024)) return;
           /* syy 模型对齐：图片一律不留在 localStorage —— 主存储就是 IndexedDB，
              内存镜像 + IDB 是图片的唯一权威副本。LS 只放文字/设置类数据，
              这样图片再多也挤不掉联系人、聊天背景、聊天记录这些文字键。
@@ -80,6 +84,7 @@
           _imgList.sort(function (a, b) { return b.len - a.len; });
           for (var ii = 0; ii < _imgList.length && _imgTotal > (1400 * 1024); ii++) {
             var itk = _imgList[ii].k;
+            if (_isEssentialImgKey(itk)) continue; // 关键图片不参与驱逐，保证首屏同步可读
             try {
               var iv2 = origGet ? origGet.call(rawLS, itk) : rawLS.getItem(itk);
               if (!iv2) continue;

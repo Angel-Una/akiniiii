@@ -34,7 +34,8 @@
     akini_localstorage_snapshot: 1,
     akini_localstorage_snapshot_backup: 1,
     akini_idb_full_snapshot: 1,
-    akini_dedupe_v: 1
+    akini_dedupe_v: 1,
+    akini_chat_critical_sync: 1 // 聊天记录同步兜底本身不重复进快照
   };
   // 视觉关键图片：优先进入 LS 小快照（但受 IMG_LS_MAX 限制）
   var PRIORITY_IMG_RE = /^(akini_(home_bg|bg_img|cover_img|s1_cover|s1_photo|s2_cover|s2_day_bg|day_bg|my_avatar|ta_avatar|icity_my_avatar|icity_ta_avatar|chat_bg|music_bg|music_player_bg|polaroid_photo|friends_bg|call_bg|callmini_bg))|(akini_contact_avatar_)|(akini_chat_bg_)/;
@@ -83,9 +84,16 @@
     if (k.indexOf('akini_chat_history') !== 0) return v;
     if (v.length < 200 * 1024) return v;
     try {
-      var a = JSON.parse(v);
-      if (!Array.isArray(a) || a.length <= CHAT_TAIL) return v;
-      return JSON.stringify(a.slice(-CHAT_TAIL));
+      /* 聊天记录是消息 HTML（<div class="msg-row" ...>），不是 JSON 数组。
+         原实现 JSON.parse 必然失败 → 返回原串 → 随后被 512KB 上限跳过，
+         导致大聊天记录从来进不了快照（切后台重进就回退到旧记录）。
+         这里按 msg-row 行切分，只留最后 CHAT_TAIL 条。 */
+      if ((v.match(/<div[^>]*class="msg-row/g) || []).length <= CHAT_TAIL) return v;
+      var idx = v.length, n = 0;
+      while ((idx = v.lastIndexOf('<div class="msg-row', idx - 1)) !== -1) {
+        if (++n === CHAT_TAIL) return v.slice(idx);
+      }
+      return v;
     } catch (e) { return v; }
   }
 
@@ -394,4 +402,136 @@
   };
 
   console.log('[akini-persist] 关键数据快照层已加载' + (_cur ? '（启动快照 ' + Object.keys(_cur.d || {}).length + ' 项）' : ''));
+})();
+
+/* ===== 聊天记录同步兜底（对齐 syy 的 _backupCriticalData） =====
+   问题：聊天记录只写「内存 + IndexedDB」，而 IDB 是异步事务。
+   切后台/被系统回收时进程可能来不及提交事务，重新进入就只剩旧记录
+   （表现为"聊天记录回退到昨天"）。
+   syy 的做法：隐藏/关闭页时同步写一份 localStorage 关键备份，回前台/启动时
+   若发现备份比当前记录更新，就把缺失的最新消息补回来。
+   这里同样实现，但只存「最近一段消息尾部」（≤480KB），写 LS 是同步的、开销可控。 */
+(function () {
+  'use strict';
+  if (window.__akiniChatSyncReady) return;
+  window.__akiniChatSyncReady = true;
+
+  var KEY = 'akini_chat_critical_sync';
+  var MAX = 480 * 1024;
+
+  function activeId() {
+    try {
+      var id = window.akiniContacts && window.akiniContacts.getActiveChatId ? window.akiniContacts.getActiveChatId() : null;
+      if (id) return id;
+    } catch (e) {}
+    try { return localStorage.getItem('akini_active_chat_id') || null; } catch (e2) { return null; }
+  }
+  function readCurrent(id) {
+    try {
+      if (window.__akiniGetChatMem) {
+        var m = window.__akiniGetChatMem(id);
+        if (m) return m;
+      }
+    } catch (e) {}
+    try {
+      if (window.akiniStore && window.akiniStore.memoryGet) {
+        var m2 = window.akiniStore.memoryGet('akini_chat_history_' + id);
+        if (m2) return m2;
+      }
+    } catch (e2) {}
+    try { return localStorage.getItem('akini_chat_history_' + id) || ''; } catch (e3) { return ''; }
+  }
+
+  function splitRows(html) {
+    var i = html.indexOf('<div class="msg-row');
+    if (i < 0) return { pre: html, rows: [] };
+    var parts = html.slice(i).split('<div class="msg-row');
+    var rows = [];
+    for (var n = 1; n < parts.length; n++) rows.push('<div class="msg-row' + parts[n]);
+    return { pre: html.slice(0, i), rows: rows };
+  }
+  function tsOf(row) {
+    var m = /data-ts="(\d+)"/.exec(row);
+    return m ? +m[1] : 0;
+  }
+
+  function save() {
+    try {
+      if (window.__akiniWiping) return;
+      var id = activeId();
+      if (!id) {
+        try { var prev0 = JSON.parse(localStorage.getItem(KEY) || 'null'); id = prev0 && prev0.id; } catch (e0) {}
+      }
+      if (!id) return;
+      var html = readCurrent(id);
+      if (!html || html.indexOf('msg-row') < 0) return;
+      var sp = splitRows(html);
+      if (!sp.rows.length) return;
+      var out = [], total = 0;
+      for (var j = sp.rows.length - 1; j >= 0; j--) {
+        var r = sp.rows[j];
+        if (total + r.length > MAX) break;
+        total += r.length;
+        out.unshift(r);
+      }
+      if (!out.length) return;
+      localStorage.setItem(KEY, JSON.stringify({ ts: Date.now(), id: id, html: sp.pre + out.join('') }));
+    } catch (e) {}
+  }
+
+  function recover(why) {
+    try {
+      if (window.__akiniWiping) return;
+      var raw = localStorage.getItem(KEY);
+      if (!raw) return;
+      var b = JSON.parse(raw);
+      if (!b || !b.html || !b.id) return;
+      var id = String(b.id);
+      var cur = readCurrent(id);
+      var B = splitRows(b.html);
+      if (!B.rows.length) return;
+      var merged = '';
+      if (!cur || cur.indexOf('msg-row') < 0 || !splitRows(cur).rows.length) {
+        /* 本地确实为空：只有对账已经完成（确认不是"还没读完"）才整段用备份 */
+        if (!window.__akiniStorageRestored) return;
+        merged = B.pre + B.rows.join('');
+      } else {
+        var A = splitRows(cur);
+        var last = 0;
+        for (var i = 0; i < A.rows.length; i++) last = Math.max(last, tsOf(A.rows[i]));
+        var append = [];
+        for (var j = 0; j < B.rows.length; j++) {
+          var t = tsOf(B.rows[j]);
+          if (t > last) append.push(B.rows[j]);
+        }
+        if (!append.length) return;
+        merged = A.pre + A.rows.join('') + append.join('');
+      }
+      try { localStorage.setItem('akini_chat_history_' + id, merged); } catch (e1) {}
+      /* 同步写内存镜像：随后 save() 通过 readCurrent 读最新值，
+         否则内存里还是旧（被截断的）副本，会把刚补好的备份又覆盖回去。 */
+      try { if (window.akiniStore && window.akiniStore.memorySet) window.akiniStore.memorySet('akini_chat_history_' + id, merged); } catch (eM) {}
+      try {
+        if (window.akiniContacts && window.akiniContacts.updateSession) {
+          window.akiniContacts.updateSession(id, { messagesHTML: merged, allowShrink: true });
+        }
+      } catch (e2) {}
+      try { if (window.__akiniRefreshChatListBadges) window.__akiniRefreshChatListBadges(); } catch (e3) {}
+      console.warn('[聊天兜底] 已补回缺失的最新消息（' + (why || '启动') + '）');
+      save();
+    } catch (e) {}
+  }
+
+  document.addEventListener('visibilitychange', function () {
+    if (document.hidden) save();
+    else setTimeout(function () { recover('回前台'); }, 250);
+  });
+  window.addEventListener('pagehide', save);
+  window.addEventListener('akini-storage-restored', function () {
+    setTimeout(function () { recover('存储对账后'); }, 300);
+  });
+  window.addEventListener('akini-cloud-restored', function () { setTimeout(function () { recover('云恢复后'); }, 300); });
+
+  window.__akiniSaveChatCritical = save;
+  window.__akiniRecoverChatCritical = recover;
 })();
