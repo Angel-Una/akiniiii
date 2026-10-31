@@ -20,22 +20,20 @@
   window.__akiniPersistReady = true;
 
   var LS_KEY = '__akini_critical_snapshot_ls';
-  var IDB_KEY = '__akini_critical_snapshot_idb';
   var LS_MAX = 400 * 1024;          // localStorage 小快照上限（syy 的 critical 也只放核心数据；写 LS 是同步的，越大越卡）
-  var IDB_MAX = 8 * 1024 * 1024;     // IndexedDB 全量快照上限（图片已不进快照，8MB 足够覆盖全部文字数据）
   var CHAT_TAIL = 300;               // 单会话聊天记录最多保留最后 300 条
-  var IMG_LS_MAX = 400 * 1024;       // 大于该体积的图片不进 LS 小快照（IDB 快照仍保留）
+  var IMG_LS_MAX = 400 * 1024;       // 大于该体积的图片不进 LS 小快照（大图本身由 IndexedDB 原键承载）
 
   var SKIP_RE = /^(akini_next_|akini_last_)/;
   /* 大体积动态数据：只走 IDB 原键 + 内存，不重复进周期快照 */
-  var HOT_SKIP_RE = /^(akini_posts|akini_posts_backup|akini_icity_diaries|akini_mail_sent|akini_mail_received)$/;
+  var HOT_SKIP_RE = /^(akini_posts|akini_icity_diaries|akini_mail_sent|akini_mail_received)$/;
   var SKIP_EXACT = {
     akini_ls_dirty: 1,
     akini_localstorage_snapshot: 1,
     akini_localstorage_snapshot_backup: 1,
     akini_idb_full_snapshot: 1,
     akini_dedupe_v: 1,
-    akini_chat_critical_sync: 1 // 聊天记录同步兜底本身不重复进快照
+    akini_chat_critical_sync: 1
   };
   // 视觉关键图片：优先进入 LS 小快照（但受 IMG_LS_MAX 限制）
   var PRIORITY_IMG_RE = /^(akini_(home_bg|bg_img|cover_img|s1_cover|s1_photo|s2_cover|s2_day_bg|day_bg|my_avatar|ta_avatar|icity_my_avatar|icity_ta_avatar|chat_bg|music_bg|music_player_bg|polaroid_photo|friends_bg|call_bg|callmini_bg))|(akini_contact_avatar_)|(akini_chat_bg_)/;
@@ -143,12 +141,12 @@
   }
 
   function priOf(k) {
+    if (k.indexOf('akini_chat_history') === 0) return 1; // 聊天记录比图片更不可复得，优先占 LS 快照预算
     if (PRIORITY_IMG_RE.test(k)) return 2;
-    if (k.indexOf('akini_chat_history') === 0) return 3;
     if (k.indexOf('akini_') === 0) return 0;
     return 4;
   }
-  // localStorage 小快照：优先文本核心，其次头像/背景，最后聊天记录尾巴
+  // localStorage 小快照优先级：文字核心 → 聊天记录尾部 → 头像/背景
   function shrinkSnap(snap) {
     var d = {}, t = (snap && snap.t) || {}, del = (snap && snap.del) || {};
     var entries = Object.keys((snap && snap.d) || {}).map(function (k) { return { k: k, v: snap.d[k] }; });
@@ -172,14 +170,6 @@
     try { localStorage.setItem(LS_KEY, sBody); } catch (e1) {
       try { localStorage.setItem(LS_KEY, JSON.stringify(shrinkSnap(small))); } catch (e2) {}
     }
-    // IDB 全量快照（超过上限时退化为小快照）
-    try {
-      var IDB = window._idbStore;
-      if (IDB && IDB.set) {
-        var full = body.length <= IDB_MAX ? body : JSON.stringify(shrinkSnap(snap));
-        IDB.set(IDB_KEY, full);
-      }
-    } catch (e3) {}
   }
 
   function sigOf() {
@@ -283,58 +273,11 @@
     return filled;
   }
 
-  function mergeSnap(a, b) {
-    if (!a) return b;
-    if (!b) return a;
-    var out = { v: 1, ts: Math.max(a.ts || 0, b.ts || 0), d: {}, t: {}, del: {} };
-    [a, b].forEach(function (s) {
-      if (!s || !s.d) return;
-      Object.keys(s.d).forEach(function (k) {
-        var sv = s.d[k];
-        if (!isReal(sv)) return;
-        var st = (s.t && +s.t[k]) || 0;
-        var have = out.d[k];
-        if (!have) { out.d[k] = sv; out.t[k] = st; return; }
-        if (k.indexOf('akini_chat_history') === 0) {
-          if (sv.length > have.length) { out.d[k] = sv; out.t[k] = st; }
-        } else if (st >= (out.t[k] || 0)) {
-          out.d[k] = sv; out.t[k] = st;
-        }
-      });
-      Object.keys(s.del || {}).forEach(function (k) { out.del[k] = Math.max(out.del[k] || 0, +s.del[k] || 0); });
-    });
-    Object.keys(out.del).forEach(function (k) { if (out.d[k] && isReal(out.d[k])) delete out.del[k]; });
-    return out;
-  }
-
   function loadLsSnap() {
     var raw = null;
     try { raw = localStorage.getItem(LS_KEY); } catch (e) {}
     if (!raw) return null;
     try { var o = JSON.parse(raw); return (o && o.d) ? o : null; } catch (e) { return null; }
-  }
-
-  function loadIdbSnap(cb) {
-    var IDB = window._idbStore;
-    if (!IDB || !IDB.get) { if (cb) cb(null); return; }
-    try {
-      IDB.get(IDB_KEY, function (raw) {
-        var o = null;
-        try { o = raw ? JSON.parse(raw) : null; } catch (e) {}
-        if (cb) cb(o);
-      });
-    } catch (e) { if (cb) cb(null); }
-  }
-
-  function restoreIdbSnap() {
-    loadIdbSnap(function (snap) {
-      if (!snap || !snap.d) return;
-      _cur = mergeSnap(_cur, snap);
-      var n = applySnap(_cur, 'IndexedDB 快照');
-      if (n && window.__akiniRestoreSettled) {
-        try { if (typeof window.__akiniOnCriticalRestored === 'function') window.__akiniOnCriticalRestored(); } catch (e) {}
-      }
-    });
   }
 
   // ---- 启动第一步：同步读 LS 小快照并立即回填（先于后续所有脚本渲染）----
@@ -343,7 +286,7 @@
     if (_cur) applySnap(_cur, '启动快照');
   } catch (eBoot) {}
 
-  // ---- 启动对账完成后再合并 IDB 全量快照 + 首次落快照 ----
+  // ---- 启动对账完成后再落一次快照 ----
   function afterSettle(fn) {
     if (window.__akiniRestoreSettled) { fn(); return; }
     var tries = 0;
@@ -355,7 +298,6 @@
     }, 250);
   }
   afterSettle(function () {
-    restoreIdbSnap();
     setTimeout(function () { takeSnapshot(false); }, 1200);
   });
 
@@ -388,168 +330,21 @@
     document.addEventListener('visibilitychange', function () {
       if (document.hidden) { flushStore(); try { takeSnapshot(false); } catch (e) {} }
     });
-    window.addEventListener('pagehide', flushStore);
+    window.addEventListener('pagehide', function () {
+      flushStore();
+      try { takeSnapshot(false); } catch (e) {} // 关闭/被回收前同步落一份关键快照（对齐 syy 的 pagehide 备份）
+    });
   } catch (eT2) {}
 
   // ---- 对外接口 ----
   window._snapshotCritical = function (force) { try { takeSnapshot(!!force); } catch (e) {} };
   window.__akiniSnap = {
     snapshot: window._snapshotCritical,
-    restore: function () { restoreIdbSnap(); if (_cur) applySnap(_cur, '手动恢复'); },
+    restore: function () { if (_cur) applySnap(_cur, '手动恢复'); },
     keyTs: function (k) { return +((_cur && _cur.t && _cur.t[k]) || 0); },
     isDeleted: function (k) { return +((_cur && _cur.del && _cur.del[k]) || 0); },
     loadedKeys: function () { return (_cur && _cur.d) ? Object.keys(_cur.d).length : 0; }
   };
 
   console.log('[akini-persist] 关键数据快照层已加载' + (_cur ? '（启动快照 ' + Object.keys(_cur.d || {}).length + ' 项）' : ''));
-})();
-
-/* ===== 聊天记录同步兜底（对齐 syy 的 _backupCriticalData） =====
-   问题：聊天记录只写「内存 + IndexedDB」，而 IDB 是异步事务。
-   切后台/被系统回收时进程可能来不及提交事务，重新进入就只剩旧记录
-   （表现为"聊天记录回退到昨天"）。
-   syy 的做法：隐藏/关闭页时同步写一份 localStorage 关键备份，回前台/启动时
-   若发现备份比当前记录更新，就把缺失的最新消息补回来。
-   这里同样实现，但只存「最近一段消息尾部」（≤480KB），写 LS 是同步的、开销可控。 */
-(function () {
-  'use strict';
-  if (window.__akiniChatSyncReady) return;
-  window.__akiniChatSyncReady = true;
-
-  var KEY = 'akini_chat_critical_sync';
-  var MAX = 480 * 1024;
-
-  function activeId() {
-    try {
-      var id = window.akiniContacts && window.akiniContacts.getActiveChatId ? window.akiniContacts.getActiveChatId() : null;
-      if (id) return id;
-    } catch (e) {}
-    try { return localStorage.getItem('akini_active_chat_id') || null; } catch (e2) { return null; }
-  }
-  function readCurrent(id) {
-    try {
-      if (window.__akiniGetChatMem) {
-        var m = window.__akiniGetChatMem(id);
-        if (m) return m;
-      }
-    } catch (e) {}
-    try {
-      if (window.akiniStore && window.akiniStore.memoryGet) {
-        var m2 = window.akiniStore.memoryGet('akini_chat_history_' + id);
-        if (m2) return m2;
-      }
-    } catch (e2) {}
-    try { return localStorage.getItem('akini_chat_history_' + id) || ''; } catch (e3) { return ''; }
-  }
-
-  function splitRows(html) {
-    var i = html.indexOf('<div class="msg-row');
-    if (i < 0) return { pre: html, rows: [] };
-    var parts = html.slice(i).split('<div class="msg-row');
-    var rows = [];
-    for (var n = 1; n < parts.length; n++) rows.push('<div class="msg-row' + parts[n]);
-    return { pre: html.slice(0, i), rows: rows };
-  }
-  function tsOf(row) {
-    var m = /data-ts="(\d+)"/.exec(row);
-    return m ? +m[1] : 0;
-  }
-  /* 用户删除过的消息有时间戳墓碑（core 的 akini_deleted_msgs_<chatId>）。
-     兜底补消息时必须跳过这些行，否则被删的消息会在重进后被补回来。 */
-  function deletedTs(id) {
-    var out = {};
-    try {
-      var a = JSON.parse(localStorage.getItem('akini_deleted_msgs_' + id) || '[]');
-      if (Array.isArray(a)) a.forEach(function (r) {
-        var t = r && typeof r === 'object' ? r.ts : r;
-        if (t) out[String(t)] = 1;
-      });
-    } catch (e) {}
-    return out;
-  }
-
-  function save() {
-    try {
-      if (window.__akiniWiping) return;
-      var id = activeId();
-      if (!id) {
-        try { var prev0 = JSON.parse(localStorage.getItem(KEY) || 'null'); id = prev0 && prev0.id; } catch (e0) {}
-      }
-      if (!id) return;
-      var html = readCurrent(id);
-      if (!html || html.indexOf('msg-row') < 0) return;
-      var sp = splitRows(html);
-      if (!sp.rows.length) return;
-      var out = [], total = 0;
-      for (var j = sp.rows.length - 1; j >= 0; j--) {
-        var r = sp.rows[j];
-        if (total + r.length > MAX) break;
-        total += r.length;
-        out.unshift(r);
-      }
-      if (!out.length) return;
-      localStorage.setItem(KEY, JSON.stringify({ ts: Date.now(), id: id, html: sp.pre + out.join('') }));
-    } catch (e) {}
-  }
-
-  function recover(why) {
-    try {
-      if (window.__akiniWiping) return;
-      var raw = localStorage.getItem(KEY);
-      if (!raw) return;
-      var b = JSON.parse(raw);
-      if (!b || !b.html || !b.id) return;
-      var id = String(b.id);
-      var cur = readCurrent(id);
-      var B = splitRows(b.html);
-      var del = deletedTs(id);
-      var kept = [];
-      for (var k = 0; k < B.rows.length; k++) {
-        if (!del[String(tsOf(B.rows[k]))]) kept.push(B.rows[k]);
-      }
-      if (!kept.length) return;
-      var merged = '';
-      if (!cur || cur.indexOf('msg-row') < 0 || !splitRows(cur).rows.length) {
-        /* 本地确实为空：只有对账已经完成（确认不是"还没读完"）才整段用备份 */
-        if (!window.__akiniStorageRestored) return;
-        merged = B.pre + kept.join('');
-      } else {
-        var A = splitRows(cur);
-        var last = 0;
-        for (var i = 0; i < A.rows.length; i++) last = Math.max(last, tsOf(A.rows[i]));
-        var append = [];
-        for (var j = 0; j < kept.length; j++) {
-          var t = tsOf(kept[j]);
-          if (t > last) append.push(kept[j]);
-        }
-        if (!append.length) return;
-        merged = A.pre + A.rows.join('') + append.join('');
-      }
-      try { localStorage.setItem('akini_chat_history_' + id, merged); } catch (e1) {}
-      /* 同步写内存镜像：随后 save() 通过 readCurrent 读最新值，
-         否则内存里还是旧（被截断的）副本，会把刚补好的备份又覆盖回去。 */
-      try { if (window.akiniStore && window.akiniStore.memorySet) window.akiniStore.memorySet('akini_chat_history_' + id, merged); } catch (eM) {}
-      try {
-        if (window.akiniContacts && window.akiniContacts.updateSession) {
-          window.akiniContacts.updateSession(id, { messagesHTML: merged, allowShrink: true });
-        }
-      } catch (e2) {}
-      try { if (window.__akiniRefreshChatListBadges) window.__akiniRefreshChatListBadges(); } catch (e3) {}
-      console.warn('[聊天兜底] 已补回缺失的最新消息（' + (why || '启动') + '）');
-      save();
-    } catch (e) {}
-  }
-
-  document.addEventListener('visibilitychange', function () {
-    if (document.hidden) save();
-    else setTimeout(function () { recover('回前台'); }, 250);
-  });
-  window.addEventListener('pagehide', save);
-  window.addEventListener('akini-storage-restored', function () {
-    setTimeout(function () { recover('存储对账后'); }, 300);
-  });
-  window.addEventListener('akini-cloud-restored', function () { setTimeout(function () { recover('云恢复后'); }, 300); });
-
-  window.__akiniSaveChatCritical = save;
-  window.__akiniRecoverChatCritical = recover;
 })();

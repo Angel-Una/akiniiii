@@ -207,23 +207,6 @@
     } catch (e) { return false; }
   }
 
-  /* 聊天记录的 backup / critical 副本（均可能躺在 IndexedDB）。
-     渲染时读取任一旧副本都会把头像拉回旧图，所以都要改。 */
-  function rewriteCopies(cid, my, ta) {
-    var keys = ['akini_chat_history_backup_' + cid, 'akini_chat_critical_' + cid];
-    keys.forEach(function (key) {
-      var v = '';
-      try { if (window.akiniStore && window.akiniStore.memoryGet) v = window.akiniStore.memoryGet(key) || ''; } catch (e) {}
-      if (!v) { try { v = localStorage.getItem(key) || ''; } catch (e) {} }
-      if (v) { applyRewrite(key, v, my, ta); return; }
-      try {
-        if (window.akiniStore && window.akiniStore.get) {
-          window.akiniStore.get(key, function (iv) { if (iv) applyRewrite(key, String(iv), my, ta); });
-        }
-      } catch (e) {}
-    });
-  }
-
   var running = false;
   var _lastSig = null;
   function sync(force) {
@@ -255,7 +238,6 @@
         /* 同步 core 的内存/渲染缓存，否则本次会话内重新渲染会退回旧头像 */
         try { window.akiniContacts.updateSession(cid, { messagesHTML: fixed, allowShrink: true }); } catch (e) {}
       }
-      rewriteCopies(cid, my, ta);
       /* 会话列表行头像也走同一份数据，顺手重绘一次 */
       try { if (typeof window.renderChatList === 'function') window.renderChatList(); } catch (e) {}
     } catch (e) {

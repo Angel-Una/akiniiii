@@ -18,7 +18,7 @@ function __akiniS1ChangeCover() {
         try { localStorage.setItem('akini_s1_cover', event.target.result); } catch(err) {}
         /* 同步内存 + IndexedDB，避免刷新后大图（LS 配额放不下）彻底丢失 */
         try { if (window.akiniStore && window.akiniStore.memorySet) window.akiniStore.memorySet('akini_s1_cover', event.target.result); } catch(eM1) {}
-        try { if (window._idbStore && window._idbStore.set) { window._idbStore.set('akini_s1_cover', event.target.result); window._idbStore.set('akini_s1_cover_backup', event.target.result); } } catch(eI1) {}
+        try { if (window._idbStore && window._idbStore.set) { window._idbStore.set('akini_s1_cover', event.target.result); } } catch(eI1) {}
       }
     };
     reader.readAsDataURL(file);

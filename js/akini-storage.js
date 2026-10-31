@@ -166,7 +166,7 @@
     akini_posts: 1, akini_icity_diaries: 1,
     akini_shop_orders: 1, akini_shop_products: 1, akini_surveys: 1, akini_wb_blocked: 1,
     akini_chat_sessions: 1, akini_chat_pins: 1, akini_home_avatars: 1,
-    akini_chat_pins_backup: 1, akini_chat_history_backup: 1, akini_music_playlists_v2: 1
+    akini_music_playlists_v2: 1
   };
   var _ESSENTIAL_TEXT_PREFIXES = ['akini_surveys_', 'akini_survey_groups_', 'akini_stk_groups_', 'akini_wb_groups_', 'akini_chat_history_'];
   function _isEssentialTextKey(k) {
@@ -596,10 +596,12 @@
     if (!IDB || !IDB.set) { _idbFlushTimer = setTimeout(flushIdbQueue, 500); return; }
     var batch = _idbQueue; _idbQueue = {};
     keys.forEach(function (k) {
+      /* 只保留主键：旧版每个键还会再写一份 k+'_backup'，等于所有数据双份落库，
+         既占空间又让「已用空间」翻倍。主键本身就是权威副本。 */
       if (batch[k] == null) {
-        try { IDB.remove(k); IDB.remove(k + '_backup'); } catch (e) {}
+        try { IDB.remove(k); } catch (e) {}
       } else {
-        try { IDB.set(k, batch[k]); IDB.set(k + '_backup', batch[k]); } catch (e) {}
+        try { IDB.set(k, batch[k]); } catch (e) {}
       }
     });
   }
@@ -621,10 +623,7 @@
     if (!isCriticalKey(k)) { if (cb) cb(lsGet(k)); return; }
     idbGet(k, function (v) {
       if (v != null && v !== '') { if (cb) cb(v); return; }
-      idbGet(k + '_backup', function (b) {
-        if (b != null && b !== '') { if (cb) cb(b); return; }
-        if (cb) cb(lsGet(k));
-      });
+      if (cb) cb(lsGet(k));
     });
   }
   function akiniGetSync(k) {
@@ -1503,12 +1502,18 @@
     if (!k) return false;
     var ks = String(k);
     if (ks === 'akini_localstorage_snapshot' || ks === 'akini_localstorage_snapshot_backup' || ks === 'akini_idb_full_snapshot') return true;
+    if (ks === '__akini_critical_snapshot_idb' || ks === 'akini_chat_critical_sync') return true;
     if (ks.indexOf('snap2_') === 0) return true;
     if (ks.indexOf('snap_') === 0) return true;
     return false;
   }
   function _primaryOfBackup(k) {
     var ks = String(k);
+    /* 聊天记录的历史副本：只保留主记录 akini_chat_history_<id> */
+    var HB = 'akini_chat_history_backup_';
+    if (ks.indexOf(HB) === 0) return 'akini_chat_history_' + ks.slice(HB.length);
+    var HC = 'akini_chat_critical_';
+    if (ks.indexOf(HC) === 0) return 'akini_chat_history_' + ks.slice(HC.length);
     // 只处理 xxx_backup -> xxx；范围控制在 akini_ 前缀，避免误删外部键
     if (ks.indexOf('akini_') === 0 && /_backup$/.test(ks) && ks.length > 14) return ks.slice(0, -7);
     return null;
@@ -1581,11 +1586,11 @@
 
   // 启动时自动清理一次（版本标记，避免每次启动都跑）
   try {
-    if (localStorage.getItem('akini_dedupe_v') !== '1') {
+    if (localStorage.getItem('akini_dedupe_v') !== '2') {
       setTimeout(function () {
         try {
           window.__akiniDedupeStorage(function () {
-            try { localStorage.setItem('akini_dedupe_v', '1'); } catch (e) {}
+            try { localStorage.setItem('akini_dedupe_v', '2'); } catch (e) {}
           });
         } catch (e) {}
       }, 4000);
