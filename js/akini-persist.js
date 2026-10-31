@@ -454,6 +454,19 @@
     var m = /data-ts="(\d+)"/.exec(row);
     return m ? +m[1] : 0;
   }
+  /* 用户删除过的消息有时间戳墓碑（core 的 akini_deleted_msgs_<chatId>）。
+     兜底补消息时必须跳过这些行，否则被删的消息会在重进后被补回来。 */
+  function deletedTs(id) {
+    var out = {};
+    try {
+      var a = JSON.parse(localStorage.getItem('akini_deleted_msgs_' + id) || '[]');
+      if (Array.isArray(a)) a.forEach(function (r) {
+        var t = r && typeof r === 'object' ? r.ts : r;
+        if (t) out[String(t)] = 1;
+      });
+    } catch (e) {}
+    return out;
+  }
 
   function save() {
     try {
@@ -489,20 +502,25 @@
       var id = String(b.id);
       var cur = readCurrent(id);
       var B = splitRows(b.html);
-      if (!B.rows.length) return;
+      var del = deletedTs(id);
+      var kept = [];
+      for (var k = 0; k < B.rows.length; k++) {
+        if (!del[String(tsOf(B.rows[k]))]) kept.push(B.rows[k]);
+      }
+      if (!kept.length) return;
       var merged = '';
       if (!cur || cur.indexOf('msg-row') < 0 || !splitRows(cur).rows.length) {
         /* 本地确实为空：只有对账已经完成（确认不是"还没读完"）才整段用备份 */
         if (!window.__akiniStorageRestored) return;
-        merged = B.pre + B.rows.join('');
+        merged = B.pre + kept.join('');
       } else {
         var A = splitRows(cur);
         var last = 0;
         for (var i = 0; i < A.rows.length; i++) last = Math.max(last, tsOf(A.rows[i]));
         var append = [];
-        for (var j = 0; j < B.rows.length; j++) {
-          var t = tsOf(B.rows[j]);
-          if (t > last) append.push(B.rows[j]);
+        for (var j = 0; j < kept.length; j++) {
+          var t = tsOf(kept[j]);
+          if (t > last) append.push(kept[j]);
         }
         if (!append.length) return;
         merged = A.pre + A.rows.join('') + append.join('');
