@@ -470,3 +470,53 @@
   setInterval(syncSentMailStatus, 30000);
 })();
 
+
+
+/* ===== 启动自救：会话表丢了就用聊天记录重建，避免「微信里的数据全没了」 =====
+   触发场景：某些旧版本/云恢复把 akini_chat_sessions 写空，但聊天记录
+   akini_chat_history_<id> 还在 IndexedDB 里。这里在启动对账完成后检查一次，
+   会话表为空且有真实历史时，把它们重新挂回联系人。 */
+(function () {
+  'use strict';
+  if (window.__akiniSessionRepairReady) return;
+  window.__akiniSessionRepairReady = true;
+
+  function readHist(cid, cb) {
+    var v = '';
+    try { v = (window.akiniStore && window.akiniStore.memoryGet ? window.akiniStore.memoryGet('akini_chat_history_' + cid) : '') || ''; } catch (e) {}
+    if (!v) { try { v = localStorage.getItem('akini_chat_history_' + cid) || ''; } catch (e) {} }
+    if (v) { cb(v); return; }
+    try {
+      if (window._idbStore && window._idbStore.get) {
+        window._idbStore.get('akini_chat_history_' + cid, function (iv) { cb(String(iv || '')); });
+        return;
+      }
+    } catch (e) {}
+    cb('');
+  }
+
+  function repair() {
+    try {
+      var C = window.akiniContacts;
+      if (!C || !C.getContacts || !C.getSessions || !C.updateSession) return;
+      if (!window.__akiniStorageRestored && !window.__akiniRestoreSettled) return;
+      var contacts = C.getContacts() || [];
+      if (!contacts.length) return;
+      var sessions = C.getSessions() || {};
+      if (Object.keys(sessions).length) return;
+      var c = contacts[0];
+      if (!c || !c.id) return;
+      readHist(c.id, function (h) {
+        if (!h || h.indexOf('msg-row') < 0) return;
+        try {
+          C.updateSession(c.id, { messagesHTML: h });
+          console.log('[会话自救] 已从聊天记录重建会话：' + c.id);
+        } catch (e) {}
+      });
+    } catch (e) {}
+  }
+
+  window.addEventListener('akini-storage-restored', function () { setTimeout(repair, 600); });
+  window.addEventListener('akini-img-ready', function () { setTimeout(repair, 600); });
+  [1500, 4000].forEach(function (ms) { setTimeout(repair, ms); });
+})();

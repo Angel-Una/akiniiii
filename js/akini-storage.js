@@ -1521,14 +1521,16 @@
   function _isDerivedDupKey(k) {
     if (!k) return false;
     var ks = String(k);
-    if (ks === 'akini_localstorage_snapshot' || ks === 'akini_localstorage_snapshot_backup' || ks === 'akini_idb_full_snapshot') return true;
-    if (ks === '__akini_critical_snapshot_idb' || ks === 'akini_chat_critical_sync') return true;
-    if (ks.indexOf('snap2_') === 0) return true;
-    if (ks.indexOf('snap_') === 0) return true;
+    /* 全量快照/影子镜像（akini_localstorage_snapshot、akini_idb_full_snapshot、
+       __akini_critical_snapshot_idb、snap_/snap2_）是旧版本遗留的「最后一份救命副本」，
+       它们已经停止写入、不会再增长；只在主键缺失时才有价值，删掉反而可能让数据彻底找不回。
+       因此去重只清理 _backup 这类同内容副本，不再动任何快照类键。 */
     return false;
   }
   function _primaryOfBackup(k) {
     var ks = String(k);
+    /* 快照类键即使以 _backup 结尾也不能当成可删副本 */
+    if (ks.indexOf('snapshot') >= 0 || ks.indexOf('snap_') === 0 || ks.indexOf('snap2_') === 0) return null;
     /* 聊天记录的历史副本：只保留主记录 akini_chat_history_<id> */
     var HB = 'akini_chat_history_backup_';
     if (ks.indexOf(HB) === 0) return 'akini_chat_history_' + ks.slice(HB.length);
@@ -1606,11 +1608,11 @@
 
   // 启动时自动清理一次（版本标记，避免每次启动都跑）
   try {
-    if (localStorage.getItem('akini_dedupe_v') !== '2') {
+    if (localStorage.getItem('akini_dedupe_v') !== '3') {
       setTimeout(function () {
         try {
           window.__akiniDedupeStorage(function () {
-            try { localStorage.setItem('akini_dedupe_v', '2'); } catch (e) {}
+            try { localStorage.setItem('akini_dedupe_v', '3'); } catch (e) {}
           });
         } catch (e) {}
       }, 4000);
@@ -1627,7 +1629,27 @@
       var raw = memGet('akini_contacts') || lsGet('akini_contacts');
       var list = safeParse(raw, null);
       if (!Array.isArray(list) || list.length <= 1) return false;
-      var keep = list.filter(function (c) { return c && c.isDefault; })[0] || list[0];
+      /* 选「真正有数据」的那个联系人作为保留对象。
+         之前默认优先 isDefault，一旦启动瞬间出现「默认占位 + 用户真实联系人」两条，
+         就会把真实联系人当成分身，连同其聊天记录一起删掉 —— 表现为「数据全没了」。 */
+      var keep = null;
+      try {
+        var bestScore = -1;
+        list.forEach(function (c) {
+          if (!c || !c.id) return;
+          var score = 0;
+          var h = '';
+          try { h = memGet('akini_chat_history_' + c.id) || ''; } catch (e0) {}
+          if (!h) { try { h = lsGet('akini_chat_history_' + c.id) || ''; } catch (e1) {} }
+          if (h && h.indexOf('msg-row') >= 0) score += 100; // 有聊天记录的最不可能是占位分身
+          var av = String(c.avatar || '');
+          if (av.length > 200) score += 30;
+          if (String(c.name || '').trim() && String(c.name).trim() !== '对方') score += 10;
+          if (c.isDefault) score += 2;
+          if (score > bestScore) { bestScore = score; keep = c; }
+        });
+      } catch (eK) { keep = null; }
+      if (!keep) keep = list.filter(function (c) { return c && c.isDefault; })[0] || list[0];
       if (!keep || !keep.id) return false;
       var dropped = list.filter(function (c) { return c && c.id && String(c.id) !== String(keep.id); });
       var dropIds = {}, dropNames = {};
