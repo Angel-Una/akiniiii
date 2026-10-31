@@ -91,13 +91,16 @@
      （它会删除多余联系人的聊天记录/头像/iCity 资料/评论，并把唯一 TA 写回 LS/IDB/内存）。
      这里只负责在合适的时机触发归一，并刷新界面，不做任何拦截或遮罩。 */
   function enforce() {
-    try { if (typeof window.__akiniEnforceSingleContact === 'function') window.__akiniEnforceSingleContact(); } catch (e) {}
+    try {
+      if (typeof window.__akiniNormalizeAll === 'function') window.__akiniNormalizeAll();
+      else if (typeof window.__akiniEnforceSingleContact === 'function') window.__akiniEnforceSingleContact();
+    } catch (e) {}
     try { if (window._renderIcity) window._renderIcity(); } catch (e) {}
     try { if (window.__akiniRefreshChatListBadges) window.__akiniRefreshChatListBadges(); } catch (e) {}
   }
   enforce();
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', enforce);
-  ['akini-storage-restored', 'akini-contacts-restored', 'load', 'pageshow'].forEach(function (evt) {
+  ['akini-storage-restored', 'akini-contacts-restored', 'akini-cloud-restored', 'load', 'pageshow'].forEach(function (evt) {
     window.addEventListener(evt, enforce);
   });
   [800, 2000, 4500].forEach(function (ms) { setTimeout(enforce, ms); });

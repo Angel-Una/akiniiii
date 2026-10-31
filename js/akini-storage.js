@@ -1688,13 +1688,156 @@
       return true;
     } catch (e) { return false; }
   }
+  /* ---- 源头清理：群聊 / 多人数据 ----
+     多人功能已下线，群聊数据不再依赖界面隐藏，直接在数据层删除：
+     群列表、群会话、群聊天记录、群聊天背景、群置顶、群头像，
+     以及以「群聊 / 群组 / 通讯录 / 多人」命名的字卡、表情、问卷分组
+     （这些分组名会以 chip 出现在聊天输入区上方）。 */
+  function _purgeGroupChatData() {
+    var removedAny = false;
+    var gids = {};
+
+    function isGroupId(v) { return !!v && /^gp/.test(String(v)); }
+
+    function rm(k) {
+      try {
+        window._akiniAllowRemove = true;
+        localStorage.removeItem(k);
+      } catch (e) {
+      } finally { window._akiniAllowRemove = false; }
+      try { memRemove(k); } catch (e) {}
+      try {
+        if (window._idbStore && window._idbStore.remove) {
+          window._idbStore.remove(k);
+          window._idbStore.remove(k + '_backup');
+        }
+      } catch (e) {}
+      removedAny = true;
+    }
+    function writeKey(k, str, allowEmpty) {
+      try {
+        if (allowEmpty) window._akiniAllowRemove = true;
+        localStorage.setItem(k, str);
+      } catch (e) {
+      } finally { if (allowEmpty) window._akiniAllowRemove = false; }
+      try { memSet(k, str); } catch (e) {}
+      try { if (window._idbStore && window._idbStore.set) window._idbStore.set(k, str); } catch (e) {}
+    }
+
+    /* 1) 群列表里记录的群 id */
+    var groups = safeParse(memGet('akini_groups') || lsGet('akini_groups'), null);
+    if (Array.isArray(groups)) {
+      groups.forEach(function (g) { if (g && g.id) gids[String(g.id)] = 1; });
+    }
+
+    /* 2) 扫描 localStorage，收集以 gp 开头的群相关键与分组 */
+    var lsKeys = [];
+    try {
+      for (var li = 0; li < localStorage.length; li++) {
+        var lk = localStorage.key(li);
+        if (!lk) continue;
+        lsKeys.push(lk);
+        if (lk.indexOf('akini_chat_history_') === 0) {
+          var hs = String(lk).slice(19).replace(/_backup$/, '');
+          if (isGroupId(hs)) gids[hs] = 1;
+        } else if (lk.indexOf('akini_chat_bg_') === 0) {
+          var bs = String(lk).slice(14);
+          if (isGroupId(bs)) gids[bs] = 1;
+        }
+      }
+    } catch (e) {}
+
+    /* 3) 每个群的专属数据 */
+    Object.keys(gids).forEach(function (gid) {
+      ['akini_chat_history_' + gid, 'akini_chat_history_backup_' + gid,
+        'akini_chat_bg_' + gid, 'akini_contact_avatar_' + gid,
+        'akini_home_avatar_' + gid, 'akini_ta_phone_' + gid].forEach(rm);
+    });
+
+    /* 4) 群列表本身 / 群聊紧急备份 / 群头像 */
+    if (Array.isArray(groups) && groups.length) writeKey('akini_groups', '[]', true);
+    if (lsKeys.some(function (k) { return k === 'akini_groups'; })) writeKey('akini_groups', '[]', true);
+    rm('akini_groups_backup');
+    try { sessionStorage.removeItem('akini_groups_emergency'); } catch (e) {}
+    rm('akini_group_line_avatar');
+
+    /* 5) 会话表去掉群会话 */
+    try {
+      var ss = safeParse(memGet('akini_sessions') || lsGet('akini_sessions'), null);
+      if (ss && typeof ss === 'object') {
+        var changedS = false;
+        Object.keys(ss).forEach(function (k) {
+          var e = ss[k];
+          if (isGroupId(k) || (e && e.type === 'group') || (e && isGroupId(e.id))) {
+            delete ss[k]; changedS = true;
+          }
+        });
+        if (changedS) {
+          var sstr = safeStringify(ss);
+          if (sstr) writeKey('akini_sessions', sstr, false);
+        }
+      }
+    } catch (e) {}
+
+    /* 6) 聊天置顶去掉群条目 */
+    try {
+      var pins = safeParse(memGet('akini_chat_pins') || lsGet('akini_chat_pins'), null);
+      var changedP = false;
+      if (pins && typeof pins === 'object') {
+        if (Array.isArray(pins)) {
+          var kept = pins.filter(function (p) {
+            var v = (p && typeof p === 'object') ? (p.id || p.chatId || p.key) : p;
+            if (isGroupId(v)) { changedP = true; return false; }
+            return true;
+          });
+          if (changedP) writeKey('akini_chat_pins', safeStringify(kept), false);
+        } else {
+          Object.keys(pins).forEach(function (k) {
+            if (isGroupId(k) || isGroupId(pins[k] && pins[k].id)) { delete pins[k]; changedP = true; }
+          });
+          if (changedP) {
+            var pstr = safeStringify(pins);
+            if (pstr) writeKey('akini_chat_pins', pstr, false);
+          }
+        }
+      }
+    } catch (e) {}
+
+    /* 7) 字卡 / 表情 / 问卷里以「群聊·群组·通讯录·多人」命名的分组 */
+    var GROUP_NAME_RE = /群聊|群组|通讯录|多人|多联系人/;
+    lsKeys.forEach(function (k) {
+      if (!/^(akini_wb_groups|akini_stk_groups|akini_survey_groups)(_|$)/.test(k)) return;
+      try {
+        var arr = safeParse(memGet(k) || lsGet(k), null);
+        if (!Array.isArray(arr)) return;
+        var keptG = arr.filter(function (g) {
+          var nm = String((g && (g.name || g.title)) || '').trim();
+          return !(nm && GROUP_NAME_RE.test(nm));
+        });
+        if (keptG.length !== arr.length) writeKey(k, safeStringify(keptG), true);
+      } catch (e) {}
+    });
+
+    if (removedAny) {
+      try { console.log('[存储] 已清除群聊/多人数据'); } catch (e) {}
+    }
+    return removedAny;
+  }
+
+  /* 统一归一入口：先清群聊数据，再把联系人收敛为唯一 TA */
+  function _akiniNormalizeAll() {
+    try { _purgeGroupChatData(); } catch (e) {}
+    try { _enforceSingleContact(); } catch (e) {}
+  }
+  window.__akiniNormalizeAll = _akiniNormalizeAll;
+  window.__akiniPurgeGroupChatData = _purgeGroupChatData;
   window.__akiniEnforceSingleContact = _enforceSingleContact;
-  try { setTimeout(function () { try { _enforceSingleContact(); } catch (e) {} }, 0); } catch (e) {}
+  try { setTimeout(function () { try { _akiniNormalizeAll(); } catch (e) {} }, 0); } catch (e) {}
   ['akini-storage-restored', 'akini-contacts-restored', 'akini-cloud-restored', 'load', 'pageshow'].forEach(function (evt) {
-    try { window.addEventListener(evt, function () { try { _enforceSingleContact(); } catch (e) {} }); } catch (e) {}
+    try { window.addEventListener(evt, function () { try { _akiniNormalizeAll(); } catch (e) {} }); } catch (e) {}
   });
   [1200, 3000, 6000, 10000].forEach(function (ms) {
-    try { setTimeout(function () { try { _enforceSingleContact(); } catch (e) {} }, ms); } catch (e) {}
+    try { setTimeout(function () { try { _akiniNormalizeAll(); } catch (e) {} }, ms); } catch (e) {}
   });
 
   // ---- 安全删除工具：放行关键键删除拦截，供清除数据/图标重置等显式操作使用 ----
