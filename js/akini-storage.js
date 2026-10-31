@@ -694,6 +694,26 @@
     }
     // 图像键写入即盖章（记录修改时间，供恢复路径仲裁新旧）
     if (isImgKey(k) && v && v.length > 10 && v !== 'null' && v !== 'undefined') { try { _stampImgKey(k); } catch (e0) {} }
+    /* 聊天记录防截断：刷新后内存里可能只有「快照尾巴」或旧的短副本，
+       任何一次自动保存都会把短尾巴写回 IndexedDB，导致老消息永久消失。
+       这里以内存里现有记录为准，拒绝明显变短的覆盖
+       （用户主动删消息/清空会先置 __akiniAllowShrinkMap 放行标记）。 */
+    if (k.indexOf('akini_chat_history_') === 0 && typeof v === 'string') {
+      try {
+        var _chatId = k.slice(19);
+        var _prevChat = memGet(k);
+        if (typeof _prevChat === 'string' && _prevChat &&
+            !(window.__akiniAllowShrinkMap && window.__akiniAllowShrinkMap[_chatId])) {
+          var _newRows = (v.match(/<div[^>]*class="msg-row/g) || []).length;
+          var _prevRows = (_prevChat.match(/<div[^>]*class="msg-row/g) || []).length;
+          if (_newRows < _prevRows && v.length <= _prevChat.length * 0.75) {
+            console.warn('[存储] 拒绝更短的聊天记录覆盖 ' + k + ' (' + _newRows + ' < ' + _prevRows + ')');
+            if (cb) cb(true);
+            return;
+          }
+        }
+      } catch (eG) {}
+    }
     memSet(k, v);
     /* syy 对齐：聊天记录只走「内存 + IndexedDB」，不再每次发消息都同步写 localStorage。
        长会话一条消息就要序列化几百 KB 并同步写盘 —— 逐条微卡顿的来源，

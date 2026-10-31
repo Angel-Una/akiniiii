@@ -225,10 +225,12 @@
       if (!force && sig === _lastSig) return;
       _lastSig = sig;
       var old = '';
-      try { old = window.__akiniGetChatMem ? window.__akiniGetChatMem(cid) : ''; } catch (e) {}
-      if (!old) { try { old = localStorage.getItem('akini_chat_history_' + cid) || ''; } catch (e) {} }
-      /* 本地还没有聊天记录：清空签名，等 IDB 回填后再重跑一次 */
-      if (!old) { _lastSig = null; return; }
+      var fromMem = false;
+      try { old = window.__akiniGetChatMem ? window.__akiniGetChatMem(cid) : ''; fromMem = !!old; } catch (e) {}
+      /* 只改内存里的权威副本。localStorage 里的聊天键只是启动快照的截断尾巴，
+         拿它去重写会把全量记录替换成尾巴 —— 老消息就此永久消失。
+         启动对账（IDB 全量水合进内存）完成前一律不落盘，等 akini-storage-restored 再重跑。 */
+      if (!fromMem || !window.__akiniRestoreSettled) { _lastSig = null; return; }
       var fixed = rewrite(old, my, ta);
       if (fixed !== old) {
         try {

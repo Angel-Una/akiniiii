@@ -28,7 +28,8 @@
       var now = Date.now();
       if (msg === __akErrLast && now - __akErrLastAt < 30000) return;
       __akErrLast = msg; __akErrLastAt = now;
-      AK('脚本异常：' + msg.slice(0, 48));
+      /* 不再向用户弹「脚本异常」提示：异常已经写进 console 与 __akiniErrorLog，
+         用户界面只应该展示业务提示。 */
     } catch (ex) {}
   });
   window.addEventListener('unhandledrejection', function(e){
@@ -45,7 +46,7 @@
       var now = Date.now();
       if (msg === __akErrLast && now - __akErrLastAt < 30000) return;
       __akErrLast = msg; __akErrLastAt = now;
-      AK(msg);
+      /* 同上：只在控制台留痕，不再弹提示 */
     } catch (ex) {}
   });
 })();
