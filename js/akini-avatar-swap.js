@@ -90,3 +90,127 @@
   refresh(true);
   setTimeout(function () { refresh(true); }, 1200);
 })();
+
+/* ===== 换头像后同步聊天记录里的旧头像 =====
+   根因：每条消息的 HTML 在发送那一刻就把当时的头像 data URI 写死了。
+   之后「我」或「TA」换头像，只会更新默认占位（线稿）头像，
+   已发送消息仍然是旧图 → 聊天界面一直显示旧头像。
+   这里在头像写入时（akini-storage 派发 akini-avatar-changed）重写：
+   1) 已持久化的聊天记录 akini_chat_history_<id>；
+   2) 当前会话内存/渲染缓存（updateSession 会更新 core 的 W 缓存）；
+   3) 已经显示在屏幕上的 .msg-row 头像。 */
+(function () {
+  'use strict';
+  if (window.__akiniChatAvatarSyncReady) return;
+  window.__akiniChatAvatarSyncReady = true;
+
+  function srcOf(v) {
+    if (!v) return '';
+    var s = String(v);
+    if (!/^(data:|https?:|blob:)/.test(s)) {
+      var m = s.match(/src="([^"]+)"/);
+      s = m && m[1] ? m[1] : '';
+    }
+    return /^(data:|https?:|blob:)/.test(s) ? s : '';
+  }
+
+  function myAvatarSrc() {
+    try { return srcOf(window.getMyAvatar ? window.getMyAvatar() : localStorage.getItem('akini_my_avatar')); } catch (e) { return ''; }
+  }
+
+  function taAvatarSrc(cid) {
+    try {
+      var t = window.akiniContacts && window.akiniContacts.getChatTarget ? window.akiniContacts.getChatTarget(cid) : null;
+      var s = t && t.avatar ? srcOf(t.avatar) : '';
+      if (s) return s;
+    } catch (e) {}
+    return srcOf(localStorage.getItem('akini_ta_avatar'));
+  }
+
+  function chatId() {
+    try {
+      var id = window.akiniContacts && window.akiniContacts.getActiveChatId ? window.akiniContacts.getActiveChatId() : null;
+      if (id) return id;
+      var c = window.__akiniDefaultContact && window.__akiniDefaultContact();
+      return c && c.id ? c.id : null;
+    } catch (e) { return null; }
+  }
+
+  function rewrite(html, my, ta) {
+    if (!html || typeof html !== 'string' || html.indexOf('msg-avatar') < 0) return html;
+    try {
+      var doc = new DOMParser().parseFromString(html, 'text/html');
+      var changed = false;
+      if (my) doc.querySelectorAll('.msg-row.me .msg-avatar img').forEach(function (img) {
+        if (img.getAttribute('src') !== my) { img.setAttribute('src', my); changed = true; }
+      });
+      if (ta) doc.querySelectorAll('.msg-row.other .msg-avatar img').forEach(function (img) {
+        if (img.getAttribute('src') !== ta) { img.setAttribute('src', ta); changed = true; }
+      });
+      return changed ? doc.body.innerHTML : html;
+    } catch (e) { return html; }
+  }
+
+  function patchDom(my, ta) {
+    var body = document.getElementById('chatBody');
+    if (!body) return;
+    if (my) body.querySelectorAll('.msg-row.me .msg-avatar img').forEach(function (img) {
+      if (img.getAttribute('src') !== my) img.setAttribute('src', my);
+    });
+    if (ta) body.querySelectorAll('.msg-row.other .msg-avatar img').forEach(function (img) {
+      if (img.getAttribute('src') !== ta) img.setAttribute('src', ta);
+    });
+  }
+
+  var running = false;
+  var _lastSig = null;
+  function sync() {
+    if (running) return;
+    running = true;
+    try {
+      var cid = chatId();
+      if (!cid) return;
+      var my = myAvatarSrc();
+      var ta = taAvatarSrc(cid);
+      if (!my && !ta) return;
+      /* 头像没变就跳过：避免每次图片加载事件都全量解析聊天记录（卡顿源） */
+      var sig = my + '|' + ta;
+      if (sig === _lastSig) return;
+      _lastSig = sig;
+      patchDom(my, ta);
+      var old = '';
+      try { old = window.__akiniGetChatMem ? window.__akiniGetChatMem(cid) : ''; } catch (e) {}
+      if (!old) { try { old = localStorage.getItem('akini_chat_history_' + cid) || ''; } catch (e) {} }
+      if (old) {
+        var fixed = rewrite(old, my, ta);
+        if (fixed !== old) {
+          try { localStorage.setItem('akini_chat_history_' + cid, fixed); } catch (e) {}
+          /* 同步 core 的内存/渲染缓存，否则本次会话内重新渲染会退回旧头像 */
+          try { window.akiniContacts.updateSession(cid, { messagesHTML: fixed, allowShrink: true }); } catch (e) {}
+        }
+      }
+      /* 会话列表行头像也走同一份数据，顺手重绘一次 */
+      try { if (typeof window.renderChatList === 'function') window.renderChatList(); } catch (e) {}
+    } catch (e) {
+    } finally {
+      running = false;
+    }
+  }
+  window.__akiniSyncChatAvatars = function () { window.__akiniAvatarsDirty = true; sync(); };
+
+  var timer = null;
+  function schedule() {
+    if (timer) clearTimeout(timer);
+    timer = setTimeout(function () {
+      timer = null;
+      sync();
+      /* 给渲染一次兜底机会后清掉脏标记，避免每次渲染都全量解析聊天记录 */
+      setTimeout(function () { window.__akiniAvatarsDirty = false; }, 600);
+    }, 200);
+  }
+
+  window.addEventListener('akini-avatar-changed', schedule);
+  window.addEventListener('akini-storage-restored', schedule);
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', schedule);
+  else schedule();
+})();

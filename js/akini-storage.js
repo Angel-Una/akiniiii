@@ -742,6 +742,17 @@
     }
     // localStorage 写失败（配额满等）时立即落盘 IDB，不等 500ms 防抖，防退出丢数据
     if (!lsOk && _restored) flushIdbQueue();
+    /* 头像变更通知：聊天记录里的头像是在发送时写死进 HTML 的，
+       换头像后必须重写历史消息，否则界面一直是旧头像。 */
+    if (k === 'akini_my_avatar' || k === 'akini_ta_avatar' ||
+        k === 'akini_icity_my_avatar' || k === 'akini_icity_ta_avatar' ||
+        k === 'akini_avatar_left' || k === 'akini_avatar_right' || k === 'akini_s1_avatar' ||
+        (typeof k === 'string' && k.indexOf('akini_contact_avatar_') === 0)) {
+      try {
+        window.__akiniAvatarsDirty = true;
+        window.dispatchEvent(new Event('akini-avatar-changed'));
+      } catch (eAv) {}
+    }
     if (cb) cb(true || lsOk);
   }
   function akiniRemove(k, cb) {
