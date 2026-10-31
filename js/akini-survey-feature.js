@@ -502,6 +502,25 @@ window.__akiniDefer=function(fn){if("requestIdleCallback"in window){requestIdleC
   }
 
   // ===== 我回答联系人发来的问卷（可选答案 + 备注 + 完成发送卡片）=====
+
+  /* 回答用的题目来源：
+     - 我自己发起的问卷：直接用它的题目；
+     - TA 邀请我回答（direction === "receive"）：不允许使用邀请卡片里的题目，
+       只能从「字卡库·问卷」中我自己添加的问卷里选一个来回答。 */
+  function libSurveyCandidates(excludeId){
+    return surveys.filter(function(x){
+      return x && x.id && x.id !== excludeId && x.direction !== "receive" && Array.isArray(x.questions) && x.questions.length > 0;
+    });
+  }
+  function replySourceOf(s){
+    if(!s) return null;
+    if(s.direction !== "receive") return { survey: s, questions: (s.questions || []), title: (s.title || "").trim() || "问卷调查", fromLibrary: false };
+    var lib = libSurveyCandidates(s.id);
+    if(!lib.length) return null;
+    var chosen = null;
+    if(s.__replySrcId){ chosen = lib.filter(function(x){ return x.id === s.__replySrcId; })[0] || null; }
+    return { survey: chosen, questions: chosen ? chosen.questions : null, title: chosen ? ((chosen.title || "").trim() || "问卷调查") : "", fromLibrary: true, candidates: lib };
+  }
   function openSurveyReply(idx){
     try {
       var s = surveys[idx];
@@ -510,10 +529,34 @@ window.__akiniDefer=function(fn){if("requestIdleCallback"in window){requestIdleC
       var titleEl = document.getElementById("surveyDetailTitle");
       var bodyEl = document.getElementById("surveyDetailBody");
       if(!modal || !titleEl || !bodyEl) return;
-      var surveyMainTitle = (s.title || "").trim() || "问卷调查";
+      var srcInfo = replySourceOf(s);
+      if(!srcInfo){
+        alert("请先在 字卡库-问卷 里添加问卷，再来回答 TA 的邀请");
+        return;
+      }
+      if(srcInfo.fromLibrary && !srcInfo.survey){
+        /* TA 邀请我回答：先让我从字卡库问卷里选一份，选中后再显示题目 */
+        var listHtml = '<div style="font-size:13px;color:#666;margin-bottom:10px">从「字卡库-问卷」选择一份问卷回答</div>';
+        srcInfo.candidates.forEach(function(c){
+          listHtml += '<button type="button" class="survey-pick-src" data-sid="'+escapeHtml(c.id)+'" style="width:100%;text-align:left;margin-bottom:10px;padding:12px;border:1px solid #e8e8e8;border-radius:10px;background:#fff;font-size:14px;color:#111;cursor:pointer">'
+            + escapeHtml((c.title || "").trim() || "问卷调查")
+            + ' <span style="font-size:12px;color:#888">（' + (c.questions || []).length + ' 题）</span></button>';
+        });
+        bodyEl.innerHTML = listHtml;
+        modal.style.display = "flex"; modal.style.zIndex = "8600";
+        titleEl.textContent = (s.title || "").trim() || "问卷调查";
+        bodyEl.querySelectorAll(".survey-pick-src").forEach(function(btn){
+          btn.addEventListener("click", function(){
+            s.__replySrcId = btn.getAttribute("data-sid");
+            openSurveyReply(idx);
+          });
+        });
+        return;
+      }
+      var surveyMainTitle = srcInfo.title;
       titleEl.textContent = surveyMainTitle;
       var html = "";
-      (s.questions || []).forEach(function(q, qIdx){
+      srcInfo.questions.forEach(function(q, qIdx){
         if (!q) return;
         html += '<div style="margin-bottom:16px;background:#f9f9f9;border-radius:10px;padding:12px">';
         var curType = q.type || s.qType || "single";
@@ -602,11 +645,18 @@ window.__akiniDefer=function(fn){if("requestIdleCallback"in window){requestIdleC
   function submitSurveyReply(idx){
     var s = surveys[idx];
     if(!s || s.replied) return;
+    var srcInfo = replySourceOf(s);
+    if(!srcInfo || !srcInfo.questions || !srcInfo.questions.length){
+      alert("请先在 字卡库-问卷 里选择一份问卷");
+      return;
+    }
     var activeId = window.akiniContacts.getActiveChatId();
     if(!activeId) activeId = s.targetId || "ta";
     var answers = [];
     var allAnswered = true;
-    (s.questions || []).forEach(function(q, qIdx){
+    s.replySrcId = srcInfo.fromLibrary && srcInfo.survey ? srcInfo.survey.id : null;
+    s.replySrcTitle = srcInfo.fromLibrary ? srcInfo.title : null;
+    srcInfo.questions.forEach(function(q, qIdx){
       var opts = (q.options || []).filter(function(o){ return (o || "").trim(); });
       if(q.type === "yesno") opts = ["是", "否"];
       var val = "";
