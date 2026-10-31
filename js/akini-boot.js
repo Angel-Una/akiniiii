@@ -1,4 +1,4 @@
-/* akini-boot.js —— 启动层（原 index.html 前 10 个内联启动脚本合并，顺序与内容不变） */
+/* akini-boot.js —— 启动层（原 index.html 内联启动/配置脚本合并，顺序与内容不变） */
 
 /* ---- boot block 1 ---- */
 
@@ -416,3 +416,15 @@ document.addEventListener("gesturestart",function(e){e.preventDefault()});docume
 
 /* ---- boot block 10 ---- */
 (function(){window.__akiniFormatDateTime=function(s){try{if(!s){return '';}var d;if(/^-?\d+/.test(String(s).trim())){d=new Date(Number(String(s).trim()));}else{d=new Date(s);}if(isNaN(d.getTime())){return '';}var now=new Date();var h=Math.floor((now-d)/3600000);if(h<1){var m=Math.floor((now-d)/60000);if(m<1){m=1;}return m+'分钟前';}if(h<24){return h+'小时前';}if(h<48){return '昨天';}var Y=d.getFullYear(),M=d.getMonth()+1,D=d.getDate();function p(n){return n<10?'0'+n:''+n;}return Y+'-'+p(M)+'-'+p(D);}catch(e){return '';}};})();
+
+/* ---- boot block 11 ---- */
+/* 网易云 API 代理（歌单导入/一起听使用） */
+window.AKINI_NETEASE_PROXY = "https://api.mc666.org.cn";
+
+/* ---- boot block 12 ---- */
+/* 早期安全桩：内联 onclick 在 app.js 定义函数之前被点也不会抛 ReferenceError */
+window.editS1CustomText = window.editS1CustomText || function(){};
+
+/* ---- boot block 13 ---- */
+/* 时序桩：main.js 启动渲染可能先于内联头像助手定义，先占位避免 ReferenceError 中断启动链；真正的实现紧随其后会覆盖它 */
+window.__akiniAvOrLine = window.__akiniAvOrLine || function(v){var s=String(v==null?"":v).trim();return s?s:"data:image/svg+xml;charset=utf-8,"+encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80"><rect width="80" height="80" fill="#f7f8fa"/><circle cx="40" cy="29" r="14" fill="none" stroke="#5a5e66" stroke-width="1.5"/><path d="M12 76c4-17 14-26 28-26s24 9 28 26" fill="none" stroke="#5a5e66" stroke-width="1.5" stroke-linecap="round"/></svg>');};

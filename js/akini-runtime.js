@@ -1167,3 +1167,174 @@ window.__akiniDefer2=function(fn){if("requestIdleCallback"in window){requestIdle
   init();
 })();
 
+/* ---- moved from index.html: 飞机票文本编辑：对齐单人模块局内弹窗（半透明遮罩+圆角卡片+ ---- */
+/* 飞机票文本编辑：对齐单人模块局内弹窗（半透明遮罩+圆角卡片+输入框+确定/取消） */
+(function(){
+  var TXT_KEY = 'akini_ticket_texts';
+  function loadTxt(){
+    try { var t = JSON.parse(localStorage.getItem(TXT_KEY)||'{}'); return t||{}; } catch(e){ return {}; }
+  }
+  function saveTxt(t){ try { localStorage.setItem(TXT_KEY, JSON.stringify(t)); } catch(e){} }
+  function applyTxt(){
+    var t = loadTxt();
+    var map = { from:'tkFrom', fromTime:'tkFromTime', to:'tkTo', toTime:'tkToTime', dur:'tkDur' };
+    for (var k in map) {
+      if (t[k]) {
+        var el = document.getElementById(map[k]);
+        if (el) el.textContent = t[k];
+      }
+    }
+  }
+  function showModal(field){
+    var labels = { from:'出发城市', fromTime:'出发时间', to:'到达城市', toTime:'到达时间', dur:'飞行时长' };
+    var defaults = { from:'RPG', fromTime:'08:00 AM', to:'RPG', toTime:'09:30 AM', dur:'1h 30m' };
+    var t = loadTxt();
+    var cur = t[field] || defaults[field] || '';
+    var title = '修改' + (labels[field] || '内容');
+
+    var oldModal = document.getElementById('akiniTicketEditOverlay');
+    if (oldModal) oldModal.remove();
+
+    var overlay = document.createElement('div');
+    overlay.id = 'akiniTicketEditOverlay';
+    overlay.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.5);z-index:8900;display:flex;align-items:center;justify-content:center;padding:20px;box-sizing:border-box;-webkit-tap-highlight-color:transparent;';
+    
+    var card = document.createElement('div');
+    card.style.cssText = 'background:#ffffff;border-radius:18px;width:100%;max-width:320px;padding:20px;box-sizing:border-box;box-shadow:0 10px 30px rgba(0,0,0,0.2);animation:akiniModalPop 0.2s ease-out;';
+    
+    var titleEl = document.createElement('div');
+    titleEl.textContent = title;
+    titleEl.style.cssText = 'font-size:16px;font-weight:700;color:#1a1a1a;margin-bottom:14px;text-align:center;';
+    
+    var input = document.createElement('input');
+    input.type = 'text';
+    input.value = cur;
+    input.placeholder = '请输入' + (labels[field]||field);
+    input.style.cssText = 'width:100%;height:42px;border:1px solid #e0e0e0;border-radius:10px;padding:0 12px;font-size:14px;box-sizing:border-box;outline:none;background:#f9f9f9;color:#1a1a1a;margin-bottom:18px;';
+    
+    var btnRow = document.createElement('div');
+    btnRow.style.cssText = 'display:flex;gap:10px;';
+    
+    var cancelBtn = document.createElement('button');
+    cancelBtn.textContent = '取消';
+    cancelBtn.type = 'button';
+    cancelBtn.style.cssText = 'flex:1;height:40px;border:none;border-radius:10px;background:#f2f2f7;color:#666;font-size:14px;font-weight:600;cursor:pointer;';
+    cancelBtn.onclick = function(){ overlay.remove(); };
+    
+    var confirmBtn = document.createElement('button');
+    confirmBtn.textContent = '确定';
+    confirmBtn.type = 'button';
+    confirmBtn.style.cssText = 'flex:1;height:40px;border:none;border-radius:10px;background:#1a1a1a;color:#fff;font-size:14px;font-weight:600;cursor:pointer;';
+    confirmBtn.onclick = function(){
+      var v = input.value.trim();
+      if (v) {
+        t[field] = v;
+        saveTxt(t);
+        applyTxt();
+      }
+      overlay.remove();
+    };
+
+    btnRow.appendChild(cancelBtn);
+    btnRow.appendChild(confirmBtn);
+    card.appendChild(titleEl);
+    card.appendChild(input);
+    card.appendChild(btnRow);
+    overlay.appendChild(card);
+
+    overlay.onclick = function(e){ if (e.target === overlay) overlay.remove(); };
+    document.body.appendChild(overlay);
+    setTimeout(function(){ input.focus(); }, 100);
+  }
+
+  window.__akiniEditTicketField = showModal;
+  document.addEventListener('DOMContentLoaded', applyTxt);
+  applyTxt();
+})();
+
+/* ---- moved from index.html: 重型库延迟加载：html2canvas(截图)/hls.js ---- */
+/* 重型库延迟加载：html2canvas(截图)/hls.js(m3u8播放) 共 ~600KB，
+   启动完成后 5 秒再加载，降低启动内存峰值，缓解 iOS 后台回收/崩溃。
+   调用点均有 window.html2canvas / window.Hls 存在性检查，天然兼容。 */
+(function(){
+  setTimeout(function(){
+    try{
+      var libs = [
+        'https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js',
+        'https://cdn.jsdelivr.net/npm/hls.js@1.5.13/dist/hls.min.js'
+      ];
+      libs.forEach(function(u){
+        var s = document.createElement('script');
+        s.src = u; s.async = true;
+        document.head.appendChild(s);
+      });
+    }catch(e){}
+  }, 5000);
+})();
+
+/* ---- moved from index.html: ===== 联系人主动来电：使用现有通话弹窗，独立概率 35 ---- */
+/* ===== 联系人主动来电：使用现有通话弹窗，独立概率 35% ===== */
+(function(){
+  var randomTimer = null;
+
+  function getNum(key, def){
+    var v = parseFloat(localStorage.getItem(key));
+    return isNaN(v) ? def : v;
+  }
+
+  function pickContact(){
+    var contacts = window.akiniContacts ? window.akiniContacts.getContacts() : [];
+    if(!contacts || contacts.length === 0) return null;
+    return contacts[Math.floor(Math.random() * contacts.length)];
+  }
+
+  function triggerIncomingCall(){
+    if((window.isCallOngoing && window.isCallOngoing()) || (window._callState && window._callState.active)) return;
+    var c = pickContact();
+    if(!c || !window.Te) return;
+    window.Te(c.name, false, {callerAvatar: c.avatar, targetId: c.id});
+  }
+
+  function scheduleRandomCall(){
+    clearTimeout(randomTimer);
+    var min = getNum('akini_num_activeCallMin', 30);
+    var max = getNum('akini_num_activeCallMax', 120);
+    if(min < 1) min = 1;
+    if(max < min) max = min;
+    var ms = (min + Math.random() * (max - min)) * 60 * 1000;
+    randomTimer = setTimeout(function(){
+      // 独立概率：每次触发点 35% 概率来电
+      if(Math.random() < 0.35) triggerIncomingCall();
+      scheduleRandomCall();
+    }, ms);
+  }
+
+  if(document.readyState === 'loading'){
+    document.addEventListener('DOMContentLoaded', scheduleRandomCall);
+  } else {
+    scheduleRandomCall();
+  }
+
+  window._akiniScheduleRandomCall = scheduleRandomCall;
+  window._akiniStopRandomCall = function(){ clearTimeout(randomTimer); };
+})();
+
+/* ---- moved from index.html: 搜索框点击更换内容 ---- */
+/* 搜索框点击更换内容 */
+window.__akiniEditSearchText=function(){
+  var el=document.getElementById("akiniSearchText");
+  if(!el)return;
+  var cur=el.textContent||"Nachhaltig";
+  var v=prompt("输入新的搜索内容",cur);
+  if(v===null)return;
+  v=v.trim().slice(0,30);
+  if(!v)return;
+  el.textContent=v;
+  try{localStorage.setItem("akini_search_text",v)}catch(e){}
+};
+(function(){
+  try{
+    var v=localStorage.getItem("akini_search_text");
+    if(v){var el=document.getElementById("akiniSearchText");if(el)el.textContent=v}
+  }catch(e){}
+})();
