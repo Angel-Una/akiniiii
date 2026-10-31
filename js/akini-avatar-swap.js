@@ -115,16 +115,49 @@
   }
 
   function myAvatarSrc() {
-    try { return srcOf(window.getMyAvatar ? window.getMyAvatar() : localStorage.getItem('akini_my_avatar')); } catch (e) { return ''; }
+    try {
+      return srcOf(window.getMyAvatar ? window.getMyAvatar() : localStorage.getItem('akini_my_avatar')) ||
+        srcOf(localStorage.getItem('akini_my_avatar')) ||
+        srcOf(localStorage.getItem('akini_avatar_left')) ||
+        srcOf(localStorage.getItem('akini_s1_avatar')) ||
+        srcOf(localStorage.getItem('akini_icity_my_avatar')) || '';
+    } catch (e) { return ''; }
   }
 
-  function taAvatarSrc(cid) {
+  /* 顶部头像（首页/聊天页顶部那一张）才是「用户刚换的头像」。
+     消息历史里的头像如果在发送时写死，之后就会和顶部头像对不上。 */
+  function topTaAvatar() {
+    try {
+      var list = ['akini_ta_avatar', 'akini_avatar_right', 'akini_icity_ta_avatar'];
+      for (var i = 0; i < list.length; i++) {
+        var s = srcOf(localStorage.getItem(list[i]));
+        if (s && !(window.__akiniIsDefaultAvatarToken && window.__akiniIsDefaultAvatarToken(s))) return s;
+      }
+    } catch (e) {}
+    return '';
+  }
+
+  function contactAvatarSrc(cid) {
     try {
       var t = window.akiniContacts && window.akiniContacts.getChatTarget ? window.akiniContacts.getChatTarget(cid) : null;
-      var s = t && t.avatar ? srcOf(t.avatar) : '';
-      if (s) return s;
-    } catch (e) {}
-    return srcOf(localStorage.getItem('akini_ta_avatar'));
+      return t && t.avatar ? srcOf(t.avatar) : '';
+    } catch (e) { return ''; }
+  }
+
+  var _unifying = false;
+  function taAvatarSrc(cid) {
+    var top = topTaAvatar();
+    var cur = contactAvatarSrc(cid);
+    /* 源头统一：顶部头像变了以后，把联系人的 avatar 也改成同一张。
+       否则聊天页头/首页/消息列表读 contact.avatar，消息历史读旧值，永远对不上。 */
+    if (top && top !== cur && !_unifying) {
+      _unifying = true;
+      try {
+        if (window.akiniContacts && window.akiniContacts.updateContact) window.akiniContacts.updateContact(cid, { avatar: top });
+      } catch (e) {}
+      setTimeout(function () { _unifying = false; }, 800);
+    }
+    return top || cur || srcOf(localStorage.getItem('akini_ta_avatar'));
   }
 
   function chatId() {
@@ -162,9 +195,38 @@
     });
   }
 
+  function applyRewrite(key, value, my, ta) {
+    try {
+      var fixed = rewrite(String(value), my, ta);
+      if (fixed === value) return false;
+      /* 必须走 akiniStore.set：聊天记录的权威副本在 IndexedDB，
+         直接写 localStorage 会被立刻移除，重进后 IDB 里的旧头像又回来了。 */
+      if (window.akiniStore && window.akiniStore.set) window.akiniStore.set(key, fixed);
+      else localStorage.setItem(key, fixed);
+      return true;
+    } catch (e) { return false; }
+  }
+
+  /* 聊天记录的 backup / critical 副本（均可能躺在 IndexedDB）。
+     渲染时读取任一旧副本都会把头像拉回旧图，所以都要改。 */
+  function rewriteCopies(cid, my, ta) {
+    var keys = ['akini_chat_history_backup_' + cid, 'akini_chat_critical_' + cid];
+    keys.forEach(function (key) {
+      var v = '';
+      try { if (window.akiniStore && window.akiniStore.memoryGet) v = window.akiniStore.memoryGet(key) || ''; } catch (e) {}
+      if (!v) { try { v = localStorage.getItem(key) || ''; } catch (e) {} }
+      if (v) { applyRewrite(key, v, my, ta); return; }
+      try {
+        if (window.akiniStore && window.akiniStore.get) {
+          window.akiniStore.get(key, function (iv) { if (iv) applyRewrite(key, String(iv), my, ta); });
+        }
+      } catch (e) {}
+    });
+  }
+
   var running = false;
   var _lastSig = null;
-  function sync() {
+  function sync(force) {
     if (running) return;
     running = true;
     try {
@@ -173,22 +235,27 @@
       var my = myAvatarSrc();
       var ta = taAvatarSrc(cid);
       if (!my && !ta) return;
-      /* 头像没变就跳过：避免每次图片加载事件都全量解析聊天记录（卡顿源） */
+      /* 头像没变就跳过重型历史改写：避免每次图片加载/回前台都全量解析聊天记录（卡顿源）。
+         当前可见 DOM 始终修正（代价很小）；数据来源（IDB 回填）晚到时由强制事件重跑。 */
       var sig = my + '|' + ta;
-      if (sig === _lastSig) return;
-      _lastSig = sig;
       patchDom(my, ta);
+      if (!force && sig === _lastSig) return;
+      _lastSig = sig;
       var old = '';
       try { old = window.__akiniGetChatMem ? window.__akiniGetChatMem(cid) : ''; } catch (e) {}
       if (!old) { try { old = localStorage.getItem('akini_chat_history_' + cid) || ''; } catch (e) {} }
-      if (old) {
-        var fixed = rewrite(old, my, ta);
-        if (fixed !== old) {
-          try { localStorage.setItem('akini_chat_history_' + cid, fixed); } catch (e) {}
-          /* 同步 core 的内存/渲染缓存，否则本次会话内重新渲染会退回旧头像 */
-          try { window.akiniContacts.updateSession(cid, { messagesHTML: fixed, allowShrink: true }); } catch (e) {}
-        }
+      /* 本地还没有聊天记录：清空签名，等 IDB 回填后再重跑一次 */
+      if (!old) { _lastSig = null; return; }
+      var fixed = rewrite(old, my, ta);
+      if (fixed !== old) {
+        try {
+          if (window.akiniStore && window.akiniStore.set) window.akiniStore.set('akini_chat_history_' + cid, fixed);
+          else localStorage.setItem('akini_chat_history_' + cid, fixed);
+        } catch (e) {}
+        /* 同步 core 的内存/渲染缓存，否则本次会话内重新渲染会退回旧头像 */
+        try { window.akiniContacts.updateSession(cid, { messagesHTML: fixed, allowShrink: true }); } catch (e) {}
       }
+      rewriteCopies(cid, my, ta);
       /* 会话列表行头像也走同一份数据，顺手重绘一次 */
       try { if (typeof window.renderChatList === 'function') window.renderChatList(); } catch (e) {}
     } catch (e) {
@@ -196,21 +263,32 @@
       running = false;
     }
   }
-  window.__akiniSyncChatAvatars = function () { window.__akiniAvatarsDirty = true; sync(); };
+  window.__akiniSyncChatAvatars = function () { window.__akiniAvatarsDirty = true; sync(true); };
 
   var timer = null;
-  function schedule() {
+  var _pendingForce = false;
+  function schedule(force) {
+    if (force) _pendingForce = true;
     if (timer) clearTimeout(timer);
     timer = setTimeout(function () {
       timer = null;
-      sync();
+      var f = _pendingForce;
+      _pendingForce = false;
+      sync(f);
       /* 给渲染一次兜底机会后清掉脏标记，避免每次渲染都全量解析聊天记录 */
       setTimeout(function () { window.__akiniAvatarsDirty = false; }, 600);
     }, 200);
   }
 
-  window.addEventListener('akini-avatar-changed', schedule);
-  window.addEventListener('akini-storage-restored', schedule);
-  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', schedule);
-  else schedule();
+  window.addEventListener('akini-avatar-changed', function () { schedule(true); });
+  window.addEventListener('akini-storage-restored', function () { schedule(true); });
+  window.addEventListener('akini-img-ready', function () { schedule(true); });
+  document.addEventListener('visibilitychange', function () { if (!document.hidden) schedule(false); });
+  window.addEventListener('pageshow', function () { schedule(false); });
+  /* 首屏之后 IDB 聊天记录可能晚到，只在还没有内容时补几轮 */
+  [1200, 3000].forEach(function (ms) {
+    setTimeout(function () { if (_lastSig === null) schedule(true); }, ms);
+  });
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', function () { schedule(true); });
+  else schedule(true);
 })();
