@@ -509,7 +509,7 @@ window.__akiniDefer=function(fn){if("requestIdleCallback"in window){requestIdleC
        只能从「字卡库·问卷」中我自己添加的问卷里选一个来回答。 */
   function libSurveyCandidates(excludeId){
     return surveys.filter(function(x){
-      return x && x.id && x.id !== excludeId && x.direction !== "receive" && Array.isArray(x.questions) && x.questions.length > 0;
+      return x && x.id && x.id !== excludeId && x.direction !== "receive" && !x.sentToChat && Array.isArray(x.questions) && x.questions.length > 0;
     });
   }
   function replySourceOf(s){
@@ -519,9 +519,11 @@ window.__akiniDefer=function(fn){if("requestIdleCallback"in window){requestIdleC
     if(!lib.length) return null;
     var chosen = null;
     if(s.__replySrcId){ chosen = lib.filter(function(x){ return x.id === s.__replySrcId; })[0] || null; }
-    return { survey: chosen, questions: chosen ? chosen.questions : null, title: chosen ? ((chosen.title || "").trim() || "问卷调查") : "", fromLibrary: true, candidates: lib };
+    if(!chosen) chosen = lib[Math.floor(Math.random() * lib.length)];
+    s.__replySrcId = chosen.id;
+    return { survey: chosen, questions: chosen.questions, title: (chosen.title || "").trim() || "问卷调查", fromLibrary: true };
   }
-  function openSurveyReply(idx){
+function openSurveyReply(idx){
     try {
       var s = surveys[idx];
       if(!s || s.replied) return;
@@ -532,25 +534,6 @@ window.__akiniDefer=function(fn){if("requestIdleCallback"in window){requestIdleC
       var srcInfo = replySourceOf(s);
       if(!srcInfo){
         alert("请先在 字卡库-问卷 里添加问卷，再来回答 TA 的邀请");
-        return;
-      }
-      if(srcInfo.fromLibrary && !srcInfo.survey){
-        /* TA 邀请我回答：先让我从字卡库问卷里选一份，选中后再显示题目 */
-        var listHtml = '<div style="font-size:13px;color:#666;margin-bottom:10px">从「字卡库-问卷」选择一份问卷回答</div>';
-        srcInfo.candidates.forEach(function(c){
-          listHtml += '<button type="button" class="survey-pick-src" data-sid="'+escapeHtml(c.id)+'" style="width:100%;text-align:left;margin-bottom:10px;padding:12px;border:1px solid #e8e8e8;border-radius:10px;background:#fff;font-size:14px;color:#111;cursor:pointer">'
-            + escapeHtml((c.title || "").trim() || "问卷调查")
-            + ' <span style="font-size:12px;color:#888">（' + (c.questions || []).length + ' 题）</span></button>';
-        });
-        bodyEl.innerHTML = listHtml;
-        modal.style.display = "flex"; modal.style.zIndex = "8600";
-        titleEl.textContent = (s.title || "").trim() || "问卷调查";
-        bodyEl.querySelectorAll(".survey-pick-src").forEach(function(btn){
-          btn.addEventListener("click", function(){
-            s.__replySrcId = btn.getAttribute("data-sid");
-            openSurveyReply(idx);
-          });
-        });
         return;
       }
       var surveyMainTitle = srcInfo.title;
@@ -1281,6 +1264,18 @@ window.__akiniDefer=function(fn){if("requestIdleCallback"in window){requestIdleC
           });
         }
       } catch(eSess) {}
+      /* 刷新后卡片消失：会话 messagesHTML 有，聊天记录主键却没写，重进按历史渲染就丢了这张卡 */
+      try {
+        var _hk = "akini_chat_history_" + chatId;
+        var _st = window.akiniStore || null;
+        var _hv = (_st && _st.memoryGet) ? _st.memoryGet(_hk) : null;
+        if(typeof _hv !== "string" || !_hv){ try { _hv = localStorage.getItem(_hk); } catch(eH0){} }
+        if(typeof _hv === "string" && _hv.indexOf(row.outerHTML) < 0){
+          var _hnew = _hv + row.outerHTML;
+          if(_st && _st.set) _st.set(_hk, _hnew); else localStorage.setItem(_hk, _hnew);
+          try { if(_st && _st.flushIdb) _st.flushIdb(); } catch(eHf) {}
+        }
+      } catch(eH) {}
       return row;
     } catch(err){
       console.error("[insertSurveyBubble] error:", err);

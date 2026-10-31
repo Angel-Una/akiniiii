@@ -389,7 +389,7 @@ window.__akiniDefer2=function(fn){if("requestIdleCallback"in window){requestIdle
       var list = readJson("akini_surveys_" + chatId, []);
       if(!Array.isArray(list)) return false;
       var pool = list.filter(function(s){
-        return s && !s.deleted && s.direction !== "receive" &&
+        return s && !s.deleted && s.direction !== "receive" && !s.sentToChat &&
           String(s.id).indexOf("srv_recv_") !== 0 &&
           Array.isArray(s.questions) && s.questions.length > 0;
       });
