@@ -526,12 +526,68 @@
     } catch (e) {}
   }
 
+  /* 同一份问卷卡在会话里被写了两遍时，只保留第一张 */
+  function dedupeSurveyRows(html) {
+    if (!html || html.indexOf('survey-bubble') < 0) return null;
+    try {
+      var wrap = document.createElement('div');
+      wrap.innerHTML = html;
+      var seen = {}, changed = false;
+      var rows = wrap.querySelectorAll('.msg-row');
+      for (var i = 0; i < rows.length; i++) {
+        /* 顺带把已存的问卷卡时间戳改回设置里的时间格式 */
+        try {
+          var ts = rows[i].getAttribute('data-ts');
+          var tsEl = ts ? rows[i].querySelector('.msg-ts') : null;
+          if (ts && tsEl && window.__akiniFmtTs) {
+            var nv = window.__akiniFmtTs(parseInt(ts, 10));
+            if (nv && tsEl.textContent !== nv) { tsEl.textContent = nv; changed = true; }
+          }
+        } catch (eTs) {}
+        var b = rows[i].querySelector('.bubble.survey-bubble[data-survey-id]');
+        if (!b) continue;
+        var id = b.getAttribute('data-survey-id') || '';
+        if (!id) continue;
+        if (seen[id]) {
+          if (rows[i].parentNode) { rows[i].parentNode.removeChild(rows[i]); changed = true; }
+        } else seen[id] = 1;
+      }
+      return changed ? wrap.innerHTML : null;
+    } catch (e) { return null; }
+  }
+
   function repair() {
     try {
       var C = window.akiniContacts;
       if (!C || !C.getContacts || !C.getSessions || !C.updateSession) { ensureChat(); return; }
       if (!window.__akiniStorageRestored && !window.__akiniRestoreSettled) { ensureChat(); return; }
       var contacts = C.getContacts() || [];
+      /* 默认联系人被清空时自动补回：和 syy 一样只有这一个对话框，而不是空白 */
+      if (!contacts.length) {
+        try {
+          var nc = C.addContact ? C.addContact("对方") : null;
+          if (nc && nc.id) {
+            try { nc.isDefault = true; C.updateContact && C.updateContact(nc.id, { isDefault: true }); } catch (e0) {}
+            contacts = C.getContacts() || [];
+            try { if (window.__akiniRefreshChatListBadges) window.__akiniRefreshChatListBadges(); } catch (e1) {}
+            console.log('[联系人自救] 已补回默认联系人');
+          }
+        } catch (e2) {}
+      }
+      /* 会话里重复的问卷卡清理一次（历史遗留的两张邀请卡） */
+      try {
+        if (!window.__akiniSurveyDupFixed && C.getSessions) {
+          window.__akiniSurveyDupFixed = true;
+          var sessAll = C.getSessions() || {};
+          Object.keys(sessAll).forEach(function (sid) {
+            var h = sessAll[sid] && sessAll[sid].messagesHTML;
+            var fixed = dedupeSurveyRows(h);
+            if (fixed) {
+              try { C.updateSession(sid, { messagesHTML: fixed }); console.log('[问卷自救] 已清理重复的问卷卡：' + sid); } catch (e3) {}
+            }
+          });
+        }
+      } catch (e4) {}
       var sessions = C.getSessions() || {};
       if (!Object.keys(sessions).length && contacts.length) {
         var c = contacts[0];

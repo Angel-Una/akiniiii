@@ -1190,11 +1190,10 @@ window.__akiniDefer=function(fn){if("requestIdleCallback"in window){requestIdleC
       row.setAttribute("data-ts", String(window.__akiniNextTs ? window.__akiniNextTs() : Date.now()));
 
       var avatar = isMe ? (window.getMyAvatar ? window.getMyAvatar() : "") : (window.getTaAvatar ? window.getTaAvatar(memberId || chatId) : (window.__akAvatarPH || ""));
-      var now = new Date();
-      var hh = String(now.getHours()).padStart(2, "0");
-      var mm = String(now.getMinutes()).padStart(2, "0");
-      var ss = String(now.getSeconds()).padStart(2, "0");
-      var timeStr = hh + ":" + mm + ":" + ss;
+      /* 时间戳必须跟随设置里的「时间格式」，不能写死 hh:mm:ss */
+      var timeStr = "";
+      try { timeStr = String(window.__akiniFmtTs ? window.__akiniFmtTs(parseInt(row.getAttribute("data-ts"), 10) || Date.now()) : ""); } catch(eTs) {}
+      if(!timeStr){ var now = new Date(); timeStr = String(now.getHours()).padStart(2, "0") + ":" + String(now.getMinutes()).padStart(2, "0"); }
       var tsHtml = '<div class="msg-ts">' + timeStr + '</div>';
       var avatarCol = '<div class="avatar-col" style="display:flex;flex-direction:column;align-items:center;flex-shrink:0;width:38px;"><div class="msg-avatar">' + avatar + '</div>' + tsHtml + '</div>';
 

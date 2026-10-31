@@ -429,29 +429,13 @@ window.__akiniDefer2=function(fn){if("requestIdleCallback"in window){requestIdle
         row = window.insertSurveyBubble
           ? window.insertSurveyBubble(clone, false, "待回答", chatId) : null;
       } catch(e){}
-      if(row && row.outerHTML && window.__akiniAppendMessageHTML){
-        /* insertSurveyBubble 已经把卡片插进 DOM，appendMessageHTML 还会再插一次。
-           先摘掉临时节点，再让 appendMessageHTML 持久化并落 DOM；随后校正确保最终只有一张 */
-        var rowHTML = row.outerHTML;
-        if(row.parentNode) row.parentNode.removeChild(row);
-        try {
-          window.__akiniAppendMessageHTML(chatId, rowHTML, {
-            lastMsg: "[问卷] " + (clone.title || "邀请你回答"),
-            lastTime: Date.now()
-          });
-        } catch(e){}
+      if(row){/* insertSurveyBubble 内部已把卡片写进 session.messagesHTML，
+         这里只做一次去重校正，绝不重复落盘（否则会出现两张一样的邀请卡） */
         setTimeout(function(){
           try {
             var body = document.getElementById("chatBody");
             if(!body) return;
             var nodes = body.querySelectorAll('.bubble.survey-bubble[data-survey-id="' + clone.id + '"]');
-            if(!nodes.length){
-              var tmp = document.createElement("div");
-              tmp.innerHTML = rowHTML;
-              while(tmp.firstChild) body.appendChild(tmp.firstChild);
-              body.scrollTop = body.scrollHeight;
-              return;
-            }
             for(var i = 0; i < nodes.length - 1; i++){
               var r = nodes[i].closest(".msg-row");
               if(r && r.parentNode) r.parentNode.removeChild(r);
