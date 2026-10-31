@@ -5563,6 +5563,7 @@ if (wipeBtn) wipeBtn.onclick = function () {
         if (missing.length >= 3) {
           console.warn("[云备份] 本地缺失 " + missing.length + " 项，已回填到内存（不再自动刷新）");
         }
+        try { window.dispatchEvent(new Event('akini-cloud-restored')); } catch (eEv) {}
       }).catch(function () {
         // 网络失败：不标记完成（防止空数据覆盖云端），10 秒后自动重试
         setTimeout(restore, 10000);

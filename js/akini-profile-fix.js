@@ -87,140 +87,18 @@
   if (window.__akiniSingleModeReady) return;
   window.__akiniSingleModeReady = true;
 
-  /* 被移除联系人名下的按联系人数据键前缀 */
-  var PER_CONTACT_PREFIXES = [
-    'akini_chat_history_', 'akini_contact_avatar_', 'akini_icity_profile_',
-    'akini_icity_ta_bg_', 'akini_chat_bg_', 'akini_surveys_', 'akini_sticker_groups_'
-  ];
-
-  function purgeContactData(cid) {
-    PER_CONTACT_PREFIXES.forEach(function (p) {
-      var k = p + cid;
-      try { window.__akiniWiping = true; } catch (e0) {}
-      try { localStorage.removeItem(k); } catch (e1) {}
-      try { localStorage.removeItem(k + '_backup'); } catch (e2) {}
-      try { if (window._idbStore && window._idbStore.remove) { window._idbStore.remove(k); window._idbStore.remove(k + '_backup'); } } catch (e3) {}
-      try { if (window.akiniStore && window.akiniStore.memoryRemove) window.akiniStore.memoryRemove(k); } catch (e4) {}
-      try { window.__akiniWiping = false; } catch (e5) {}
-    });
+  /* 单人模式：数据层归一由 akini-storage.js 的 __akiniEnforceSingleContact 负责
+     （它会删除多余联系人的聊天记录/头像/iCity 资料/评论，并把唯一 TA 写回 LS/IDB/内存）。
+     这里只负责在合适的时机触发归一，并刷新界面，不做任何拦截或遮罩。 */
+  function enforce() {
+    try { if (typeof window.__akiniEnforceSingleContact === 'function') window.__akiniEnforceSingleContact(); } catch (e) {}
+    try { if (window._renderIcity) window._renderIcity(); } catch (e) {}
+    try { if (window.__akiniRefreshChatListBadges) window.__akiniRefreshChatListBadges(); } catch (e) {}
   }
-
-  /* 丢弃被移除联系人的会话条目，避免留下幽灵会话 */
-  function dropSessions(cid) {
-    try {
-      var raw = localStorage.getItem('akini_chat_sessions');
-      if (!raw) return;
-      var obj = JSON.parse(raw);
-      if (!obj || typeof obj !== 'object' || !obj[cid]) return;
-      delete obj[cid];
-      var str = JSON.stringify(obj);
-      try { localStorage.setItem('akini_chat_sessions', str); } catch (e1) {}
-      try { if (window._idbStore && window._idbStore.set) window._idbStore.set('akini_chat_sessions', str); } catch (e2) {}
-      try { if (window.akiniStore && window.akiniStore.set) window.akiniStore.set('akini_chat_sessions', str); } catch (e3) {}
-    } catch (e) {}
-  }
-
-  function pickKeep(list) {
-    if (!Array.isArray(list) || !list.length) return null;
-    return list.filter(function (c) { return c && c.isDefault; })[0] || list[0];
-  }
-
-  /* 把任意长度联系人数组收敛为唯一 TA；多余者连同其专属数据一并清除 */
-  function collapse(list, origSave) {
-    if (!Array.isArray(list) || list.length <= 1) return list;
-    var keep = pickKeep(list);
-    if (!keep || !keep.id) return list;
-    list.forEach(function (c) {
-      if (c && c.id && String(c.id) !== String(keep.id)) {
-        purgeContactData(c.id);
-        dropSessions(c.id);
-      }
-    });
-    var single = [keep];
-    /* 必须走 saveContacts 原函数：它会同步内存缓存 d，否则 iCity/通讯录仍读到旧的 2 个 */
-    try { if (origSave) origSave.call(window.akiniContacts, single); } catch (e1) {}
-    var str = JSON.stringify(single);
-    try { localStorage.setItem('akini_contacts', str); } catch (e2) {}
-    try { if (window._idbStore && window._idbStore.set) window._idbStore.set('akini_contacts', str); } catch (e3) {}
-    try {
-      if (String(localStorage.getItem('akini_active_chat_id') || '') !== String(keep.id)) {
-        localStorage.setItem('akini_active_chat_id', keep.id);
-      }
-    } catch (e4) {}
-    try { console.warn('[单人模式] 已收敛多余联系人 ' + (list.length - 1) + ' 个，只保留 ' + keep.id); } catch (e5) {}
-    return single;
-  }
-
-  /* 在 API 层打补丁：任何读取/写入都只能看到唯一 TA，从根上防止第二个账号出现 */
-  function patchApi() {
-    var api = window.akiniContacts;
-    if (!api || !api.getContacts || api.__akiniSinglePatched) return false;
-    api.__akiniSinglePatched = true;
-    var origGet = api.getContacts;
-    var origSave = api.saveContacts;
-    var origAdd = api.addContact;
-
-    api.getContacts = function () {
-      var list;
-      try { list = origGet.call(api); } catch (e) { return []; }
-      return collapse(list, origSave) || [];
-    };
-    if (origSave) {
-      api.saveContacts = function (list) {
-        return origSave.call(api, collapse(list, origSave));
-      };
-    }
-    if (origAdd) {
-      api.addContact = function (name, avatar) {
-        var list;
-        /* 走已打补丁的 getContacts：顺带把历史残留的第二个联系人收敛掉 */
-        try { list = api.getContacts(); } catch (e) { list = origGet.call(api) || []; }
-        if (Array.isArray(list) && list.length) {
-          try { console.warn('[单人模式] addContact 已拦截：只允许一个 TA'); } catch (e2) {}
-          return pickKeep(list) || list[0];
-        }
-        return origAdd.call(api, name, avatar);
-      };
-    }
-    return true;
-  }
-
-  function enforceSingleContact() {
-    try {
-      if (!window.akiniContacts) return;
-      patchApi();
-      var api = window.akiniContacts;
-      if (!api || !api.getContacts) return;
-      var list = api.getContacts() || [];   // 触发 collapse，同时修正内存缓存
-      if (!Array.isArray(list) || !list.length) return;
-      var keep = list[0];
-      if (!keep || !keep.id) return;
-      try {
-        if (String(localStorage.getItem('akini_active_chat_id') || '') !== String(keep.id)) {
-          localStorage.setItem('akini_active_chat_id', keep.id);
-        }
-      } catch (e5) {}
-      try { if (window._renderIcity) window._renderIcity(); } catch (e6) {}
-      try { if (window.__akiniRefreshChatListBadges) window.__akiniRefreshChatListBadges(); } catch (e7) {}
-    } catch (e) {}
-  }
-
-  function boot() {
-    enforceSingleContact();
-  }
-
-  boot();
-  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot);
+  enforce();
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', enforce);
   ['akini-storage-restored', 'akini-contacts-restored', 'load', 'pageshow'].forEach(function (evt) {
-    window.addEventListener(evt, boot);
+    window.addEventListener(evt, enforce);
   });
-  [800, 2000, 4500].forEach(function (ms) { setTimeout(boot, ms); });
-  /* 兜底：前 20 秒内每秒轻量检查一次（仅比较长度，长度正常时零开销），
-     覆盖异步 IDB 恢复把旧备份里的多余联系人写回内存的窗口期 */
-  var _guardN = 0;
-  var _guard = setInterval(function () {
-    _guardN++;
-    try { if (window.akiniContacts && window.akiniContacts.getContacts().length > 1) enforceSingleContact(); } catch (e) {}
-    if (_guardN >= 20) clearInterval(_guard);
-  }, 1000);
+  [800, 2000, 4500].forEach(function (ms) { setTimeout(enforce, ms); });
 })();

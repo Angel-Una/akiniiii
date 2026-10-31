@@ -1565,36 +1565,32 @@
     }
   } catch (e) {}
 
-  /* ---- 存量清洗：多人功能已移除，联系人里遗留的同名分身直接删除 ----
-     一人一角色：同名只保留默认联系人（无默认则保留最后一条），
-     并同步删除被删分身的聊天记录、会话与头像，避免孤儿数据。 */
-  function _purgeDuplicateContacts() {
-    var mark = function () { try { localStorage.setItem('akini_contacts_dedup_v1', '1'); } catch (e) {} };
+  /* ---- 源头归一：全站只允许一个联系人 ----
+     多人功能已移除，联系人里遗留的分身/历史残留（例如第二个「对方」）直接在数据层删除。
+     保留默认联系人（无 isDefault 则保留第一条），并同步删除分身的：
+     聊天记录、会话、头像、iCity 资料，以及朋友圈/日记里由分身发表的评论。
+     在启动、IDB 恢复完成、云回填这几个时机各跑一次，避免旧的两人数据被重新写回。 */
+  function _enforceSingleContact() {
     try {
-      if (localStorage.getItem('akini_contacts_dedup_v1') === '1') return;
-      var raw = memGet('akini_contacts');
-      if (!raw) raw = lsGet('akini_contacts');
+      var raw = memGet('akini_contacts') || lsGet('akini_contacts');
       var list = safeParse(raw, null);
-      if (!Array.isArray(list) || list.length < 2) { mark(); return; }
-      var byName = {}, kept = [], dropped = [];
-      list.forEach(function (c) {
-        if (!c || !c.id) return;
-        var name = String(c.name || '').trim();
-        var prev = byName[name];
-        if (!prev) { byName[name] = c; kept.push(c); return; }
-        if (c.isDefault && !prev.isDefault) {
-          byName[name] = c;
-          kept[kept.indexOf(prev)] = c;
-          dropped.push(prev);
-        } else {
-          dropped.push(c);
-        }
+      if (!Array.isArray(list) || list.length <= 1) return false;
+      var keep = list.filter(function (c) { return c && c.isDefault; })[0] || list[0];
+      if (!keep || !keep.id) return false;
+      var dropped = list.filter(function (c) { return c && c.id && String(c.id) !== String(keep.id); });
+      var dropIds = {}, dropNames = {};
+      var keepName = String(keep.name || '').trim();
+      dropped.forEach(function (c) {
+        dropIds[String(c.id)] = 1;
+        var nm = String(c.name || '').trim();
+        if (nm && nm !== keepName) dropNames[nm] = 1;
       });
-      if (!dropped.length) { mark(); return; }
+
       dropped.forEach(function (c) {
         var id = c.id;
         ['akini_chat_history_' + id, 'akini_chat_history_backup_' + id,
-          'akini_contact_avatar_' + id, 'akini_ta_phone_' + id].forEach(function (k) {
+          'akini_contact_avatar_' + id, 'akini_ta_phone_' + id,
+          'akini_icity_profile_' + id, 'akini_home_avatar_' + id].forEach(function (k) {
           try {
             window._akiniAllowRemove = true;
             localStorage.removeItem(k);
@@ -1608,22 +1604,98 @@
           } catch (e) {}
         });
       });
+
+      /* 会话表去掉分身条目 */
       try {
         var ss = safeParse(memGet('akini_sessions') || lsGet('akini_sessions'), null);
         if (ss && typeof ss === 'object') {
-          dropped.forEach(function (c) { try { delete ss[c.id]; } catch (e) {} });
-          localStorage.setItem('akini_sessions', JSON.stringify(ss));
+          var changedS = false;
+          dropped.forEach(function (c) { if (ss[c.id]) { delete ss[c.id]; changedS = true; } });
+          if (changedS) {
+            var sstr = safeStringify(ss);
+            if (sstr) {
+              try { localStorage.setItem('akini_sessions', sstr); } catch (e) {}
+              try { memSet('akini_sessions', sstr); } catch (e) {}
+              try { if (window._idbStore && window._idbStore.set) window._idbStore.set('akini_sessions', sstr); } catch (e) {}
+            }
+          }
         }
       } catch (e) {}
-      localStorage.setItem('akini_contacts', JSON.stringify(kept));
+
+      /* 评论过滤：作者 id 命中被删分身，或作者名是被删分身且与保留者不同名 */
+      var isDropComment = function (cm) {
+        if (!cm || typeof cm !== 'object') return false;
+        if (cm.authorId && dropIds[String(cm.authorId)]) return true;
+        var a = String(cm.author || cm.name || '').trim();
+        return !!(a && dropNames[a]);
+      };
+      var filterComments = function (arr) {
+        var changed = false;
+        arr.forEach(function (item) {
+          if (!item || !Array.isArray(item.comments)) return;
+          var before = item.comments.length;
+          item.comments = item.comments.filter(function (cm) { return !isDropComment(cm); });
+          if (item.comments.length !== before) changed = true;
+        });
+        return changed;
+      };
+      var writeKey = function (k, str) {
+        if (!str) return;
+        try { localStorage.setItem(k, str); } catch (e) {}
+        try { memSet(k, str); } catch (e) {}
+        try { if (window._idbStore && window._idbStore.set) window._idbStore.set(k, str); } catch (e) {}
+      };
+      ['akini_icity_diaries', 'akini_posts'].forEach(function (k) {
+        try {
+          var arr = safeParse(memGet(k) || lsGet(k), null);
+          if (Array.isArray(arr) && filterComments(arr)) writeKey(k, safeStringify(arr));
+        } catch (e) {}
+      });
+      /* 每篇日记的评论独立备份键：同样过滤，防止恢复时把分身评论合并回来 */
+      try {
+        var lsKeys = [];
+        for (var li = 0; li < localStorage.length; li++) {
+          var lk = localStorage.key(li);
+          if (lk && lk.indexOf('akini_icity_comments_') === 0) lsKeys.push(lk);
+        }
+        lsKeys.forEach(function (k) {
+          try {
+            var obj = safeParse(localStorage.getItem(k), null);
+            if (!obj || !Array.isArray(obj.comments)) return;
+            var before = obj.comments.length;
+            obj.comments = obj.comments.filter(function (cm) { return !isDropComment(cm); });
+            if (obj.comments.length !== before) writeKey(k, safeStringify(obj));
+          } catch (e) {}
+        });
+      } catch (e) {}
+
+      /* 写回唯一联系人（内存 / localStorage / IDB 三层一致） */
+      var single = safeStringify([keep]);
+      if (!single) return false;
+      try { localStorage.setItem('akini_contacts', single); } catch (e) {}
+      try { memSet('akini_contacts', single); } catch (e) {}
+      try { if (window._idbStore && window._idbStore.set) window._idbStore.set('akini_contacts', single); } catch (e) {}
+      try { if (window.akiniStore && window.akiniStore.memorySet) window.akiniStore.memorySet('akini_contacts', single); } catch (e) {}
       try { if (window.akiniContacts && window.akiniContacts.resetCache) window.akiniContacts.resetCache(); } catch (e) {}
-      mark();
-      console.log('[存储] 已清理 ' + dropped.length + ' 个重复联系人分身');
-    } catch (e) {}
+      try {
+        if (String(localStorage.getItem('akini_active_chat_id') || '') !== String(keep.id)) {
+          localStorage.setItem('akini_active_chat_id', keep.id);
+        }
+      } catch (e) {}
+      try { if (window._renderIcity) window._renderIcity(); } catch (e) {}
+      try { if (window.__akiniRefreshChatListBadges) window.__akiniRefreshChatListBadges(); } catch (e) {}
+      try { console.log('[存储] 已归一为唯一联系人 ' + keep.id + '，移除 ' + dropped.length + ' 个多余联系人'); } catch (e) {}
+      return true;
+    } catch (e) { return false; }
   }
-  try {
-    setTimeout(function () { try { _purgeDuplicateContacts(); } catch (e) {} }, 4000);
-  } catch (e) {}
+  window.__akiniEnforceSingleContact = _enforceSingleContact;
+  try { setTimeout(function () { try { _enforceSingleContact(); } catch (e) {} }, 0); } catch (e) {}
+  ['akini-storage-restored', 'akini-contacts-restored', 'akini-cloud-restored', 'load', 'pageshow'].forEach(function (evt) {
+    try { window.addEventListener(evt, function () { try { _enforceSingleContact(); } catch (e) {} }); } catch (e) {}
+  });
+  [1200, 3000, 6000, 10000].forEach(function (ms) {
+    try { setTimeout(function () { try { _enforceSingleContact(); } catch (e) {} }, ms); } catch (e) {}
+  });
 
   // ---- 安全删除工具：放行关键键删除拦截，供清除数据/图标重置等显式操作使用 ----
   window._akiniSafeRemove = function (key, cb) {
