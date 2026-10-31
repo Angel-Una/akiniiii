@@ -416,10 +416,21 @@
     _lsImgUsed = tot;
     return tot;
   }
-  /* syy 模型对齐：图片不写 localStorage（只进内存 + IndexedDB）。
-     LS 的配额全部留给文字/设置，避免图片把联系人/聊天背景/聊天记录挤掉。 */
+  /* 关键图片（头像/壁纸/聊天背景等）保留在 localStorage，刷新后同步就能读到；
+     其余图片仍只进内存 + IndexedDB。之前这里无条件返回 false，导致就算迁移时
+     把关键图片留在 LS，运行时任何一次写入又把它删出 LS —— 切后台重进首屏又是空白。
+     预算：单张 ≤400KB、LS 图片总量 ≤1.4MB，超出部分留给文字/名字/设置。 */
   function _imgLsBudgetOk(k, v) {
-    return false;
+    try {
+      if (!v || typeof v !== 'string' || v.length <= 10) return true;
+      if (v.length > (400 * 1024)) return false;
+      if (_lsImgUsed < 0) _recalcLsImgUsed();
+      var oldLen = 0;
+      try { oldLen = ((origGet ? origGet.call(rawLS, k) : rawLS.getItem(k)) || '').length; } catch (eO) {}
+      var other = _lsImgUsed - oldLen;
+      if (other < 0) other = 0;
+      return other + v.length <= (1400 * 1024);
+    } catch (e) { return false; }
   }
 
   // ---- 内存缓存：同步读取的权威层，IDB 恢复后也会回填到这里 ----
