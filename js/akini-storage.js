@@ -1700,6 +1700,8 @@
     function isGroupId(v) { return !!v && /^gp/.test(String(v)); }
 
     function rm(k) {
+      var had = false;
+      try { had = memGet(k) != null || lsGet(k) != null; } catch (e) {}
       try {
         window._akiniAllowRemove = true;
         localStorage.removeItem(k);
@@ -1712,7 +1714,7 @@
           window._idbStore.remove(k + '_backup');
         }
       } catch (e) {}
-      removedAny = true;
+      if (had) removedAny = true;
     }
     function writeKey(k, str, allowEmpty) {
       try {
@@ -1755,8 +1757,8 @@
     });
 
     /* 4) 群列表本身 / 群聊紧急备份 / 群头像 */
-    if (Array.isArray(groups) && groups.length) writeKey('akini_groups', '[]', true);
-    if (lsKeys.some(function (k) { return k === 'akini_groups'; })) writeKey('akini_groups', '[]', true);
+    var gCur = memGet('akini_groups') || lsGet('akini_groups');
+    if (gCur && gCur !== '[]') { writeKey('akini_groups', '[]', true); removedAny = true; }
     rm('akini_groups_backup');
     try { sessionStorage.removeItem('akini_groups_emergency'); } catch (e) {}
     rm('akini_group_line_avatar');
@@ -1805,6 +1807,7 @@
 
     /* 7) 字卡 / 表情 / 问卷里以「群聊·群组·通讯录·多人」命名的分组 */
     var GROUP_NAME_RE = /群聊|群组|通讯录|多人|多联系人/;
+    var removedGids = {};
     lsKeys.forEach(function (k) {
       if (!/^(akini_wb_groups|akini_stk_groups|akini_survey_groups)(_|$)/.test(k)) return;
       try {
@@ -1812,11 +1815,28 @@
         if (!Array.isArray(arr)) return;
         var keptG = arr.filter(function (g) {
           var nm = String((g && (g.name || g.title)) || '').trim();
-          return !(nm && GROUP_NAME_RE.test(nm));
+          if (nm && GROUP_NAME_RE.test(nm)) {
+            if (g && g.id != null) removedGids[String(g.id)] = 1;
+            return false;
+          }
+          return true;
         });
-        if (keptG.length !== arr.length) writeKey(k, safeStringify(keptG), true);
+        if (keptG.length !== arr.length) { writeKey(k, safeStringify(keptG), true); removedAny = true; }
       } catch (e) {}
     });
+    /* 被删分组里的字卡/表情一并删除，避免以「未分组」形式继续出现 */
+    if (Object.keys(removedGids).length) {
+      ['akini_wordbank', 'akini_stickers'].forEach(function (k) {
+        try {
+          var arr = safeParse(memGet(k) || lsGet(k), null);
+          if (!Array.isArray(arr)) return;
+          var keptI = arr.filter(function (it) {
+            return !(it && it.gid != null && removedGids[String(it.gid)]);
+          });
+          if (keptI.length !== arr.length) { writeKey(k, safeStringify(keptI), true); removedAny = true; }
+        } catch (e) {}
+      });
+    }
 
     if (removedAny) {
       try { console.log('[存储] 已清除群聊/多人数据'); } catch (e) {}
@@ -1826,7 +1846,16 @@
 
   /* 统一归一入口：先清群聊数据，再把联系人收敛为唯一 TA */
   function _akiniNormalizeAll() {
-    try { _purgeGroupChatData(); } catch (e) {}
+    var changed = false;
+    try { changed = !!_purgeGroupChatData(); } catch (e) {}
+    if (changed) {
+      /* 分组被删后立刻重建聊天输入区上方的分组 chip，避免旧「群聊 AI」标签残留 */
+      try { if (typeof window.renderGroupFilter === 'function') window.renderGroupFilter(); } catch (e) {}
+      try {
+        var ov = document.getElementById('wordbankOverlay');
+        if (ov && ov.style && ov.style.display !== 'none' && typeof window.renderWordbank === 'function') window.renderWordbank();
+      } catch (e) {}
+    }
     try { _enforceSingleContact(); } catch (e) {}
   }
   window.__akiniNormalizeAll = _akiniNormalizeAll;
