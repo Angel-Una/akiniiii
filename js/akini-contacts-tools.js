@@ -98,18 +98,9 @@
       // 含 base64 图片的大内容只写 IndexedDB（异步、不阻塞主线程），避免 localStorage 同步写入卡顿/超限
       var hasBig=html.indexOf("data:image")>=0&&html.length>200000;
       if(!hasBig){
-        try{localStorage.setItem("akini_chat_history_"+ac,html);localStorage.setItem("akini_chat_history_backup_"+ac,html);}catch(e){}
+        try{localStorage.setItem("akini_chat_history_"+ac,html);}catch(e){}
       }
-      /* 防吞消息：备份键绝不只走 IDB 异步路径——IDB 事务若因切后台/闪退被系统回收，
-         LS 主键已同步落盘但备份键缺失，重启时从备份恢复会拿到残缺记录。
-         即便 hasBig 也至少把备份键同步写 LS（≤5MB 配额内尽力而为，失败静默）。
-         不做行数缩减保护：备份是"最后防线"，优先保证内容完整存在 */
-      try{
-        if(!localStorage.getItem("akini_chat_history_backup_"+ac)){
-          try{localStorage.setItem("akini_chat_history_backup_"+ac,html);}catch(e){}
-        }
-      }catch(e){}
-      if(window._idbStore&&window._idbStore.set){window._idbStore.set("akini_chat_history_"+ac,html);window._idbStore.set("akini_chat_history_backup_"+ac,html);}
+      if(window._idbStore&&window._idbStore.set){window._idbStore.set("akini_chat_history_"+ac,html);}
       if(window.akiniContacts&&window.akiniContacts.updateSession){window.akiniContacts.updateSession(ac,{messagesHTML:html});}
       /* 已移除「全量快照 akini_localstorage_snapshot」写入：
          它与专属主键/备份键重复存同一份数据，是储存越用越大（同一张图存 4~5 遍）的主要来源。 */

@@ -1643,9 +1643,6 @@
         try { s.remove('snap_' + key); } catch (e) {}
         try { s.remove('snap2_' + key); } catch (e) {}
       }
-      if (window._akiniCacheStore && typeof window._akiniCacheStore.backupAll === 'function') {
-        try { window._akiniCacheStore.backupAll(); } catch (e) {}
-      }
       if (cb) cb();
     });
   };

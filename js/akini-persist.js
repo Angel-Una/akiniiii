@@ -201,14 +201,6 @@
     } catch (e) {}
   }
 
-  function checkSnapshot(force) {
-    if (window.__akiniWiping) return;
-    if (!force && !window.__akiniRestoreSettled) return;
-    var sig = sigOf();
-    if (!force && sig === _lastSig) return;
-    takeSnapshot(force, sig);
-  }
-
   // ---- 回填：只补“缺失/空壳”的键，绝不覆盖用户已有真实数据 ----
   var DEFAULT_VALS = {
     akini_my_name: ['我', ''], akini_ta_name: ['梦角', '对方', 'TA', ''],
