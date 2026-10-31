@@ -251,12 +251,7 @@ function __akiniS1RestoreSlot(slot) {
     try {
       IDB.get(k, function (dv) {
         if (__akiniS1ApplyImg(slot, dv)) return;
-        try {
-          IDB.get(k + '_backup', function (bv) {
-            if (__akiniS1ApplyImg(slot, bv)) return;
-            nextKey();
-          });
-        } catch (e3) { nextKey(); }
+        nextKey();
       });
     } catch (e2) { nextKey(); }
   })();

@@ -293,9 +293,6 @@
       localStorage.removeItem('snap_akini_home_bg');
       localStorage.removeItem('snap2_akini_home_bg');
       localStorage.removeItem('akini_home_bg_ok');
-      localStorage.removeItem('akini_localstorage_snapshot');
-      localStorage.removeItem('akini_localstorage_snapshot_backup');
-      localStorage.removeItem('akini_idb_full_snapshot');
       window._akiniAllowRemove = false;
     } catch(e2) { window._akiniAllowRemove = false; }
     try { if (window.__akiniImgCache) delete window.__akiniImgCache['akini_home_bg']; } catch(e3) {}
@@ -306,9 +303,6 @@
         window._idbStore.remove('akini_home_bg');
         window._idbStore.remove('snap_akini_home_bg');
         window._idbStore.remove('snap2_akini_home_bg');
-        window._idbStore.remove('akini_localstorage_snapshot');
-        window._idbStore.remove('akini_localstorage_snapshot_backup');
-        window._idbStore.remove('akini_idb_full_snapshot');
       }
     } catch(e4) {}
     try {
