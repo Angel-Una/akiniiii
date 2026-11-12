@@ -1,6 +1,0 @@
-127.0.0.1 - - [12/Nov/2026 20:06:11] "GET /index.html HTTP/1.1" 200 -
-127.0.0.1 - - [12/Nov/2026 20:06:11] "GET /js/akini-storage.js HTTP/1.1" 200 -
-127.0.0.1 - - [12/Nov/2026 20:06:11] "GET /js/akini-core.js HTTP/1.1" 200 -
-127.0.0.1 - - [12/Nov/2026 20:06:11] "GET /js/akini-stickers.js HTTP/1.1" 200 -
-127.0.0.1 - - [12/Nov/2026 20:06:11] "GET /index.html HTTP/1.1" 304 -
-127.0.0.1 - - [12/Nov/2026 20:06:12] "GET /index.html HTTP/1.1" 304 -
