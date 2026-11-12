@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <title>Akini</title>
+  <style>
+    *{box-sizing:border-box}body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:#f3f4f6;color:#222}.phone{max-width:430px;margin:0 auto;min-height:100vh;background:#fff;display:flex;flex-direction:column;position:relative;box-shadow:0 0 24px rgba(0,0,0,.08)}.home{flex:1;display:flex;flex-direction:column;padding:18px;gap:14px;overflow:auto}.hero{border-radius:22px;min-height:220px;padding:18px;color:#fff;background:linear-gradient(135deg,#8fa6ff,#ffd0dc);background-size:cover;background-position:center;position:relative;overflow:hidden}.hero.black{background:#050505!important}.hero h1{margin:0 0 8px;font-size:24px}.hero p{margin:0;opacity:.9}.card{background:#fff;border:1px solid #eee;border-radius:18px;padding:14px;box-shadow:0 6px 20px rgba(0,0,0,.04)}.row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}.btn{border:0;border-radius:999px;background:#1a1a1a;color:#fff;padding:10px 16px;font-size:14px;cursor:pointer}.btn.secondary{background:#f0f0f0;color:#333}.bottom{display:flex;border-top:1px solid #eee;background:#fff}.bottom button{flex:1;border:0;background:#fff;padding:13px 6px;font-size:13px;color:#555}.bottom button:active{background:#f6f6f6}.wordbank-overlay{display:none;position:fixed;inset:0;z-index:50;background:#fff;max-width:430px;margin:0 auto;flex-direction:column}.wb-header{height:54px;display:flex;align-items:center;gap:10px;padding:10px 14px;border-bottom:1px solid #eee;flex-shrink:0}.wb-head-close,.wb-head-add{border:0;background:#f4f4f4;border-radius:16px;padding:8px 12px}.icon-title{flex:1;text-align:center;font-weight:700}.wb-tabs{display:flex;gap:6px;padding:8px 10px;border-bottom:1px solid #eee;overflow-x:auto;flex-shrink:0}.wb-tabs .tab{border:0;background:#f4f4f4;border-radius:16px;padding:8px 12px;white-space:nowrap;color:#555}.wb-tabs .tab.active{background:#1a1a1a;color:#fff}.wb-toolbar{display:flex;justify-content:space-between;gap:8px;padding:7px 12px;border-bottom:1px solid #eee;background:#fff;overflow-x:auto;flex-shrink:0}.left-group,.right-group{display:flex;gap:7px}.tool-btn{width:36px;height:36px;border:1px solid #e0e0e0;background:#fff;border-radius:11px;display:flex;align-items:center;justify-content:center;font-size:13px;color:#333}.tool-btn.active{background:#1a1a1a;color:#fff}.wb-content{flex:1;overflow:auto;-webkit-overflow-scrolling:touch;background:#fff;display:flex;flex-direction:column}.wb-bottom{display:flex;gap:10px;padding:10px 14px;border-top:1px solid #eee}.btn-add,.btn-close{flex:1;border:0;border-radius:18px;padding:11px;background:#1a1a1a;color:#fff}.btn-close{background:#f2f2f2;color:#333}.wb-stk-person{display:flex;flex-direction:column;align-items:center;gap:4px;cursor:pointer;flex-shrink:0;-webkit-tap-highlight-color:transparent}.wb-stk-person-avatar{width:44px;height:44px;border-radius:50%;background:#f0f0f0;overflow:hidden;display:flex;align-items:center;justify-content:center}.wb-stk-person.active .wb-stk-person-avatar{box-shadow:0 0 0 2px #1a1a1a}.wb-stk-name{font-size:11px;max-width:58px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:#888}.wb-stk-person.active .wb-stk-name{color:#1a1a1a;font-weight:700}.wb-stk-chip{border:0;border-radius:13px;background:#eee;padding:7px 11px;white-space:nowrap}.wb-stk-chip.active{background:#fff;box-shadow:inset 0 0 0 1px #111}.wb-stk-item{position:relative;aspect-ratio:1/1;background:#fff;border:1px solid #eee;border-radius:10px;overflow:hidden;display:flex;align-items:center;justify-content:center}.wb-stk-item img{max-width:100%;max-height:100%;object-fit:contain}.empty-text{text-align:center;color:#bbb;font-size:14px;padding:44px 12px}.actionbar{display:none;gap:8px;align-items:center}.actionbar button{border:0;border-radius:16px;padding:7px 12px}.modal{display:none;position:fixed;inset:0;z-index:80;background:rgba(0,0,0,.35);align-items:flex-end;max-width:430px;margin:0 auto}.modal-box{background:#fff;border-radius:18px 18px 0 0;padding:18px;width:100%;max-height:80vh;overflow:auto}.modal input,.modal textarea{width:100%;border:1px solid #ddd;border-radius:12px;padding:10px;margin:8px 0;font:inherit}.small{font-size:12px;color:#888}.searchbar{display:none;padding:9px 14px;border-bottom:1px solid #eee}.searchbar input{width:100%;border:0;background:#f2f2f2;border-radius:18px;padding:10px 14px;outline:0}.survey-card{margin:10px 12px;padding:12px;border:1px solid #eee;border-radius:14px}.badge{font-size:11px;background:#f2f2f2;border-radius:10px;padding:2px 7px;color:#666}
+  </style>
+</head>
+<body>
+<div class="phone">
+  <main class="home" id="home">
+    <section class="hero" id="homeHero"><h1 id="homeTitle">Akini</h1><p id="homeSubtitle">自定义你的聊天与字卡库</p></section>
+    <section class="card"><div class="row"><button class="btn" id="setTextBtn">保存设置文字</button><button class="btn secondary" id="setImageBtn">导入首页图片</button><input id="homeImageInput" type="file" accept="image/*" hidden></div><p class="small">已保存基础数据与图片缓存；如遇大图恢复较慢，可重新打开页面等待同步完成。</p></section>
+    <section class="card"><strong>默认联系人</strong><p class="small">内置“我”和“默认联系人”，用于表情包与问卷场景。</p></section>
+  </main>
+  <nav class="bottom"><button id="wordBtn" type="button">字卡库</button><button id="settingsBtn" type="button">设置</button><button id="chatBtn" type="button">聊天</button></nav>
+</div>
+
+<div class="wordbank-overlay" id="wordbankOverlay">
+  <div class="wb-header">
+    <button class="wb-head-close" id="closeWordBank" type="button">关闭</button>
+    <div class="icon-title">字卡库</div>
+    <button class="wb-head-add" id="wbHeadAdd" type="button">＋新增</button>
+    <div id="wbSelectActions" class="actionbar"><button id="wbSelectAllBtn" type="button">全选</button><button id="wbSelectDeleteBtn" type="button">删除</button><button id="wbSelectCancelBtn" type="button">取消</button></div>
+    <div id="wbBlockActions" class="actionbar"><button id="wbBlockDoBtn" type="button">屏蔽</button><button id="wbBlockUndoBtn" type="button">取消屏蔽</button><button id="wbBlockExitBtn" type="button">完成</button></div>
+  </div>
+  <div class="searchbar" id="wbSearchBar"><input id="wbSearchInput" placeholder="搜索当前 tab"><button id="wbSearchClose" type="button">×</button></div>
+  <div class="wb-tabs" id="wbTabs">
+    <button class="tab active" data-tab="main" type="button">主字卡</button>
+    <button class="tab" data-tab="emoji" type="button">Emoji</button>
+    <button class="tab" data-tab="pat" type="button">拍一拍</button>
+    <button class="tab" data-tab="sticker" type="button">表情包</button>
+    <button class="tab" data-tab="survey" type="button">问卷</button>
+  </div>
+  <div class="wb-toolbar">
+    <div class="left-group"><button class="tool-btn" id="searchBtn" type="button">搜</button><button class="tool-btn" id="groupBtn" type="button">组</button><button class="tool-btn" id="dedupBtn" type="button">重</button><button class="tool-btn" id="wbImportBtn" type="button">导入</button><input id="wbImportInput" type="file" accept="image/*,.json" hidden><button class="tool-btn" id="wbBlockBtn" type="button">屏</button></div>
+    <div class="right-group"><button class="tool-btn" id="selectBtn" type="button">选</button></div>
+  </div>
+  <div id="wbGroupFilter"></div>
+  <div class="wb-content" id="wbContent"><div class="empty-text">列表空空如也</div></div>
+  <div class="wb-bottom"><button class="btn-add" id="addWordBtn" type="button">+ 新增</button><button class="btn-close" id="closeWordBankBottom" type="button">关闭</button></div>
+</div>
+
+<div class="modal" id="addStickerModal"><div class="modal-box"><h3>添加表情包</h3><p class="small">添加到当前头像对应的人物库。</p><input id="stickerFile" type="file" accept="image/*" multiple><div class="row"><button class="btn" id="confirmStickerAdd" type="button">添加</button><button class="btn secondary" id="cancelStickerAdd" type="button">取消</button></div></div></div>
+<div class="modal" id="surveyCreateModal"><div class="modal-box"><h3>新建问卷</h3><input id="surveyTitle" placeholder="问卷标题"><textarea id="surveyQuestion" placeholder="问题"></textarea><div class="row"><button class="btn" id="confirmSurveyAdd" type="button">保存</button><button class="btn secondary" id="cancelSurveyAdd" type="button">取消</button></div></div></div>
+<script src="js/akini-storage.js"></script>
+<script src="js/akini-core.js"></script>
+<script src="js/akini-stickers.js"></script>
+</body>
+</html>

@@ -1,0 +1,21 @@
+{
+  "recipe_sha256": "49f908db91a7d990e6595220fd80b776db7e76fe7393fa01e99ad9e8ff218743",
+  "run_id": "845b7dac2c3e427ca82df837a2835058",
+  "schema_version": "repo-rebuild-environment-state/v1",
+  "values": {
+    "APP_BASE_URL": {
+      "scope": "run",
+      "sensitivity": "public",
+      "source": "step:serve-akini-static",
+      "value": "http://127.0.0.1:49543",
+      "value_type": "url"
+    },
+    "PLAYWRIGHT_BROWSERS_PATH": {
+      "scope": "recipe",
+      "sensitivity": "public",
+      "source": "provider",
+      "value": "/ms-playwright",
+      "value_type": "string"
+    }
+  }
+}

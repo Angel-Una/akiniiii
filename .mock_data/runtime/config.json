@@ -1,0 +1,113 @@
+{
+  "capabilities": {
+    "browsers": {},
+    "executables": {},
+    "filesystem": {},
+    "network": {},
+    "node_packages": {},
+    "python_packages": {},
+    "system_packages": []
+  },
+  "environment": {
+    "inherit_allowlist": [],
+    "secrets": {},
+    "values": {
+      "PLAYWRIGHT_BROWSERS_PATH": {
+        "scope": "recipe",
+        "sensitivity": "public",
+        "source": "provider",
+        "value": "/ms-playwright",
+        "value_type": "string"
+      }
+    }
+  },
+  "external_service": {
+    "provider": "none",
+    "required": false
+  },
+  "provision": {
+    "steps": []
+  },
+  "recipe_sha256": "49f908db91a7d990e6595220fd80b776db7e76fe7393fa01e99ad9e8ff218743",
+  "schema_version": "repo-runtime-recipe/v0.5",
+  "serve": {
+    "required": true,
+    "steps": [
+      {
+        "command": {
+          "script": "python3 .rebuild_report/runner_checks/serve_akini_static.py",
+          "shell": "bash"
+        },
+        "cwd": ".",
+        "env": {},
+        "exports": [
+          {
+            "name": "APP_BASE_URL",
+            "required": true,
+            "source": {
+              "path": "${REBUILD_RUNTIME_DIR}/akini.port",
+              "transform": {
+                "host": "127.0.0.1",
+                "scheme": "http",
+                "type": "url_from_port"
+              },
+              "type": "file_value"
+            },
+            "value_type": "url"
+          }
+        ],
+        "id": "serve-akini-static",
+        "log_path": "${REBUILD_RUNTIME_DIR}/logs/serve-akini-static.log",
+        "mode": "background",
+        "ready_check": {
+          "path": "${REBUILD_RUNTIME_DIR}/akini.port",
+          "timeout_seconds": 30,
+          "type": "file_value"
+        },
+        "requires_env": [],
+        "source_files": [
+          {
+            "path": ".rebuild_report/runner_checks/serve_akini_static.py",
+            "sha256": "2b5ee9914159208f3897efe3cc017daee923fd545ef02ff24a1bb35c06f3c216"
+          }
+        ],
+        "timeout_seconds": 300
+      }
+    ]
+  },
+  "shell": "bash",
+  "teardown": {
+    "steps": []
+  },
+  "verify": {
+    "steps": [
+      {
+        "command": {
+          "script": "python3 .rebuild_report/runner_checks/validate_akini_repo_t_minus.py",
+          "shell": "bash"
+        },
+        "cwd": ".",
+        "env": {},
+        "exports": [],
+        "id": "verify-akini-ui-gap",
+        "log_path": "${REBUILD_RUNTIME_DIR}/logs/verify-akini-ui-gap.log",
+        "mode": "foreground",
+        "ready_check": {
+          "timeout_seconds": 1,
+          "type": "process_alive"
+        },
+        "requires_env": [
+          "APP_BASE_URL"
+        ],
+        "source_files": [
+          {
+            "path": ".rebuild_report/runner_checks/validate_akini_repo_t_minus.py",
+            "sha256": "40c3b870084807811e9ca54dba36b6164ef4469f013f444331f4eebd5959ab53"
+          }
+        ],
+        "timeout_seconds": 120
+      }
+    ]
+  },
+  "workspace": "."
+}

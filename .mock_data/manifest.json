@@ -1,0 +1,248 @@
+{
+  "schema_version": "repo-solve-input/v2",
+  "plan_version": "repo-solve-input-plan/v2",
+  "effective_query_format": "tagged_supplement_sections/v1",
+  "target_id": "17ee1f84aad58622dd15",
+  "origin_query": "\\n表情包我还是无法点击头像切换人物去添加独立表情包 而且问卷和表情包工具栏我圈起来的那两个根本点了表情包和问卷根本没用呀 除非就是要一直点好几下才能用 还有所有字卡库tab和默认联系人表情包我的表情包都是独立的 包括分组屏蔽啥的都是独立的 还有网站数据会莫名其妙丢失!比如我设置的内容还有导入的图片都会消失!\\n<user_uploaded_files>\\n  <file path=\"/workspace/.uploads/F8B5B09A-52A1-4B9B-8A25-072EF4CAE3DE_F92D87B1-58EC-4CB0-A8B6-4889FC201CE4.jpeg\" name=\"F92D87B1-58EC-4CB0-A8B6-4889FC201CE4.jpeg\" mime_type=\"\"/>\\n</user_uploaded_files>\\n\\n",
+  "current_effective_query": "\\n表情包我还是无法点击头像切换人物去添加独立表情包 而且问卷和表情包工具栏我圈起来的那两个根本点了表情包和问卷根本没用呀 除非就是要一直点好几下才能用 还有所有字卡库tab和默认联系人表情包我的表情包都是独立的 包括分组屏蔽啥的都是独立的 还有网站数据会莫名其妙丢失!比如我设置的内容还有导入的图片都会消失!\\n<user_uploaded_files>\\n  <file path=\".mock_data/inputs/current_toolbar_circle.jpeg\" name=\"F92D87B1-58EC-4CB0-A8B6-4889FC201CE4.jpeg\" mime_type=\"\"/>\\n</user_uploaded_files>\\n\\n",
+  "related_historical_queries": [
+    {
+      "target_id": "0dc1b44a9af51bc003d6",
+      "origin_query": "\\n图一我每次自定义文字的时候都会这样 要等几秒才会恢复 图二我开了后台通知为什么自动给我开后台保活了 而且关都关不掉  icity个人设置联系人和我的头像那里总是变成图三那样你看 为什么被变成椭圆形了 图四我添加的表情包为什么不显示啊？而且我还不能切换到联系人去给他添加表情包 问卷包括表情包tab的工具栏为什么都不能用了 还有首页模块我添加的图片有时候重进会变成黑色\\n<user_uploaded_files>\\n  <file path=\"/workspace/.uploads/27A64C89-5967-43F4-9D90-321A25C07FD2_951BDDC4-2CBB-42FB-A6D3-219290B30ACA.png\" name=\"951BDDC4-2CBB-42FB-A6D3-219290B30ACA.png\" mime_type=\"\"/>\\n  <file path=\"/workspace/.uploads/40642A7A-AC1B-4AB2-A031-0B43B2804A29_E0C25F48-D85D-4347-A61E-FDFA0A17F09B.png\" name=\"E0C25F48-D85D-4347-A61E-FDFA0A17F09B.png\" mime_type=\"\"/>\\n  <file path=\"/workspace/.uploads/7CAB9DD3-7C34-4528-AA3E-A984E7E9D04E_12B6F218-8D53-46F9-9C47-0680683FF366.png\" name=\"12B6F218-8D53-46F9-9C47-0680683FF366.png\" mime_type=\"\"/>\\n  <file path=\"/workspace/.uploads/5FF517B8-497B-4974-ADA6-DC749E349C4F_E2299E9F-4E43-4210-BA97-025D9EB0993B.png\" name=\"E2299E9F-4E43-4210-BA97-025D9EB0993B.png\" mime_type=\"\"/>\\n</user_uploaded_files>\\n\\n",
+      "effective_query": "\\n图一我每次自定义文字的时候都会这样 要等几秒才会恢复 图二我开了后台通知为什么自动给我开后台保活了 而且关都关不掉  icity个人设置联系人和我的头像那里总是变成图三那样你看 为什么被变成椭圆形了 图四我添加的表情包为什么不显示啊？而且我还不能切换到联系人去给他添加表情包 问卷包括表情包tab的工具栏为什么都不能用了 还有首页模块我添加的图片有时候重进会变成黑色\\n<user_uploaded_files>\\n  <file path=\".mock_data/inputs/historical_0dc1_fig1.png\" name=\"951BDDC4-2CBB-42FB-A6D3-219290B30ACA.png\" mime_type=\"\"/>\\n  <file path=\".mock_data/inputs/historical_0dc1_fig2.png\" name=\"E0C25F48-D85D-4347-A61E-FDFA0A17F09B.png\" mime_type=\"\"/>\\n  <file path=\".mock_data/inputs/historical_0dc1_fig3.png\" name=\"12B6F218-8D53-46F9-9C47-0680683FF366.png\" mime_type=\"\"/>\\n  <file path=\".mock_data/inputs/historical_0dc1_fig4.png\" name=\"E2299E9F-4E43-4210-BA97-025D9EB0993B.png\" mime_type=\"\"/>\\n</user_uploaded_files>\\n\\n"
+    }
+  ],
+  "problem_context": {
+    "mode": "supplement",
+    "supplement": "当前问题承接上一轮 Akini 字卡库、表情包、问卷和图片保存反馈。仓库已恢复为可运行的静态浏览器应用，包含字卡库入口、表情包/问卷 tab、默认联系人头像和本地存储层；移动端轻触响应与大图恢复延迟仍是当前待处理现象。",
+    "source_target_ids": [
+      "0dc1b44a9af51bc003d6"
+    ]
+  },
+  "effective_query": "<user_query>\n\\n表情包我还是无法点击头像切换人物去添加独立表情包 而且问卷和表情包工具栏我圈起来的那两个根本点了表情包和问卷根本没用呀 除非就是要一直点好几下才能用 还有所有字卡库tab和默认联系人表情包我的表情包都是独立的 包括分组屏蔽啥的都是独立的 还有网站数据会莫名其妙丢失!比如我设置的内容还有导入的图片都会消失!\\n<user_uploaded_files>\\n  <file path=\".mock_data/inputs/current_toolbar_circle.jpeg\" name=\"F92D87B1-58EC-4CB0-A8B6-4889FC201CE4.jpeg\" mime_type=\"\"/>\\n</user_uploaded_files>\\n\\n\n</user_query>\n<supplement_info>\n<problem_context>\n当前问题承接上一轮 Akini 字卡库、表情包、问卷和图片保存反馈。仓库已恢复为可运行的静态浏览器应用，包含字卡库入口、表情包/问卷 tab、默认联系人头像和本地存储层；移动端轻触响应与大图恢复延迟仍是当前待处理现象。\n</problem_context>\n<service_info>\n项目服务已启动，启动说明在 `.mock_data/runtime/application_access.md`，访问地址在 `.mock_data/runtime/runtime.env` 的 `APP_BASE_URL` 中，对应路径为 `/index.html`。\n截图在 `.mock_data/inputs/historical_0dc1_fig1.png`。\n截图在 `.mock_data/inputs/historical_0dc1_fig2.png`。\n截图在 `.mock_data/inputs/historical_0dc1_fig3.png`。\n截图在 `.mock_data/inputs/historical_0dc1_fig4.png`。\n截图在 `.mock_data/inputs/current_toolbar_circle.jpeg`。\n</service_info>\n</supplement_info>",
+  "query_reviews": [
+    {
+      "query_target_id": "0dc1b44a9af51bc003d6",
+      "result": "resources_ready",
+      "resource_ids": [
+        "app-service-historical",
+        "hist-fig1",
+        "hist-fig2",
+        "hist-fig3",
+        "hist-fig4"
+      ]
+    },
+    {
+      "query_target_id": "17ee1f84aad58622dd15",
+      "result": "resources_ready",
+      "resource_ids": [
+        "app-service-current",
+        "current-circled-toolbar"
+      ]
+    }
+  ],
+  "resources": [
+    {
+      "id": "app-service-historical",
+      "query_target_id": "0dc1b44a9af51bc003d6",
+      "kind": "service",
+      "decision": "restored",
+      "required": true,
+      "materialization": {
+        "type": "mock_data_file",
+        "path": ".mock_data/runtime/application_access.md",
+        "sha256": "b63cf004561587fb8b37c4ff4ff31c280e91d06dd3e39c36281ccde8cffb195e"
+      },
+      "user_access": {
+        "mode": "application_service",
+        "status": "started",
+        "guide_path": ".mock_data/runtime/application_access.md",
+        "env_names": [
+          "APP_BASE_URL"
+        ],
+        "route": "/index.html"
+      },
+      "materialized": true,
+      "materialized_path": ".mock_data/runtime/application_access.md",
+      "materialized_sha256": "b63cf004561587fb8b37c4ff4ff31c280e91d06dd3e39c36281ccde8cffb195e"
+    },
+    {
+      "id": "app-service-current",
+      "query_target_id": "17ee1f84aad58622dd15",
+      "kind": "service",
+      "decision": "restored",
+      "required": true,
+      "materialization": {
+        "type": "mock_data_file",
+        "path": ".mock_data/runtime/application_access.md",
+        "sha256": "b63cf004561587fb8b37c4ff4ff31c280e91d06dd3e39c36281ccde8cffb195e"
+      },
+      "user_access": {
+        "mode": "application_service",
+        "status": "started",
+        "guide_path": ".mock_data/runtime/application_access.md",
+        "env_names": [
+          "APP_BASE_URL"
+        ],
+        "route": "/index.html"
+      },
+      "materialized": true,
+      "materialized_path": ".mock_data/runtime/application_access.md",
+      "materialized_sha256": "b63cf004561587fb8b37c4ff4ff31c280e91d06dd3e39c36281ccde8cffb195e"
+    },
+    {
+      "id": "hist-fig1",
+      "query_target_id": "0dc1b44a9af51bc003d6",
+      "kind": "image",
+      "decision": "restored",
+      "required": true,
+      "materialization": {
+        "type": "mock_data_file",
+        "path": ".mock_data/inputs/historical_0dc1_fig1.png",
+        "sha256": "6a87d28025a43a6f0b3cb877c8d95cbb9662ee829fbaf9670cf8907f21c0c603"
+      },
+      "user_access": {
+        "mode": "workspace_path"
+      },
+      "materialized": true,
+      "materialized_path": ".mock_data/inputs/historical_0dc1_fig1.png",
+      "materialized_sha256": "6a87d28025a43a6f0b3cb877c8d95cbb9662ee829fbaf9670cf8907f21c0c603"
+    },
+    {
+      "id": "hist-fig2",
+      "query_target_id": "0dc1b44a9af51bc003d6",
+      "kind": "image",
+      "decision": "restored",
+      "required": true,
+      "materialization": {
+        "type": "mock_data_file",
+        "path": ".mock_data/inputs/historical_0dc1_fig2.png",
+        "sha256": "d77268ddec2ea491acde35643115db3ed2c766e324b467c77e94e9a65e7fcac3"
+      },
+      "user_access": {
+        "mode": "workspace_path"
+      },
+      "materialized": true,
+      "materialized_path": ".mock_data/inputs/historical_0dc1_fig2.png",
+      "materialized_sha256": "d77268ddec2ea491acde35643115db3ed2c766e324b467c77e94e9a65e7fcac3"
+    },
+    {
+      "id": "hist-fig3",
+      "query_target_id": "0dc1b44a9af51bc003d6",
+      "kind": "image",
+      "decision": "restored",
+      "required": true,
+      "materialization": {
+        "type": "mock_data_file",
+        "path": ".mock_data/inputs/historical_0dc1_fig3.png",
+        "sha256": "25a00b4aa940256b82210869c9517e20926840737fb1b73d0d4c2b8d9d206197"
+      },
+      "user_access": {
+        "mode": "workspace_path"
+      },
+      "materialized": true,
+      "materialized_path": ".mock_data/inputs/historical_0dc1_fig3.png",
+      "materialized_sha256": "25a00b4aa940256b82210869c9517e20926840737fb1b73d0d4c2b8d9d206197"
+    },
+    {
+      "id": "hist-fig4",
+      "query_target_id": "0dc1b44a9af51bc003d6",
+      "kind": "image",
+      "decision": "restored",
+      "required": true,
+      "materialization": {
+        "type": "mock_data_file",
+        "path": ".mock_data/inputs/historical_0dc1_fig4.png",
+        "sha256": "59ac8778578ef2ae9c7365e609cebb3938af87c0fbc58d41031fc403fce12303"
+      },
+      "user_access": {
+        "mode": "workspace_path"
+      },
+      "materialized": true,
+      "materialized_path": ".mock_data/inputs/historical_0dc1_fig4.png",
+      "materialized_sha256": "59ac8778578ef2ae9c7365e609cebb3938af87c0fbc58d41031fc403fce12303"
+    },
+    {
+      "id": "current-circled-toolbar",
+      "query_target_id": "17ee1f84aad58622dd15",
+      "kind": "image",
+      "decision": "restored",
+      "required": true,
+      "materialization": {
+        "type": "mock_data_file",
+        "path": ".mock_data/inputs/current_toolbar_circle.jpeg",
+        "sha256": "e7cbd4389b33a5fd21a5937329064b340aeb265af1577ac0464e5ce2fd84c222"
+      },
+      "user_access": {
+        "mode": "workspace_path"
+      },
+      "materialized": true,
+      "materialized_path": ".mock_data/inputs/current_toolbar_circle.jpeg",
+      "materialized_sha256": "e7cbd4389b33a5fd21a5937329064b340aeb265af1577ac0464e5ce2fd84c222"
+    }
+  ],
+  "rewrites": [
+    {
+      "query_target_id": "0dc1b44a9af51bc003d6",
+      "kind": "resource_reference",
+      "operation": "replace",
+      "old_text": "/workspace/.uploads/27A64C89-5967-43F4-9D90-321A25C07FD2_951BDDC4-2CBB-42FB-A6D3-219290B30ACA.png",
+      "new_text": ".mock_data/inputs/historical_0dc1_fig1.png",
+      "expected_occurrences": 1,
+      "resource_ids": [
+        "hist-fig1"
+      ],
+      "reason": "Original upload path is not portable for solve; materialized restored bytes under .mock_data/inputs."
+    },
+    {
+      "query_target_id": "0dc1b44a9af51bc003d6",
+      "kind": "resource_reference",
+      "operation": "replace",
+      "old_text": "/workspace/.uploads/40642A7A-AC1B-4AB2-A031-0B43B2804A29_E0C25F48-D85D-4347-A61E-FDFA0A17F09B.png",
+      "new_text": ".mock_data/inputs/historical_0dc1_fig2.png",
+      "expected_occurrences": 1,
+      "resource_ids": [
+        "hist-fig2"
+      ],
+      "reason": "Original upload path is not portable for solve; materialized restored bytes under .mock_data/inputs."
+    },
+    {
+      "query_target_id": "0dc1b44a9af51bc003d6",
+      "kind": "resource_reference",
+      "operation": "replace",
+      "old_text": "/workspace/.uploads/7CAB9DD3-7C34-4528-AA3E-A984E7E9D04E_12B6F218-8D53-46F9-9C47-0680683FF366.png",
+      "new_text": ".mock_data/inputs/historical_0dc1_fig3.png",
+      "expected_occurrences": 1,
+      "resource_ids": [
+        "hist-fig3"
+      ],
+      "reason": "Original upload path is not portable for solve; materialized restored bytes under .mock_data/inputs."
+    },
+    {
+      "query_target_id": "0dc1b44a9af51bc003d6",
+      "kind": "resource_reference",
+      "operation": "replace",
+      "old_text": "/workspace/.uploads/5FF517B8-497B-4974-ADA6-DC749E349C4F_E2299E9F-4E43-4210-BA97-025D9EB0993B.png",
+      "new_text": ".mock_data/inputs/historical_0dc1_fig4.png",
+      "expected_occurrences": 1,
+      "resource_ids": [
+        "hist-fig4"
+      ],
+      "reason": "Original upload path is not portable for solve; materialized restored bytes under .mock_data/inputs."
+    },
+    {
+      "query_target_id": "17ee1f84aad58622dd15",
+      "kind": "resource_reference",
+      "operation": "replace",
+      "old_text": "/workspace/.uploads/F8B5B09A-52A1-4B9B-8A25-072EF4CAE3DE_F92D87B1-58EC-4CB0-A8B6-4889FC201CE4.jpeg",
+      "new_text": ".mock_data/inputs/current_toolbar_circle.jpeg",
+      "expected_occurrences": 1,
+      "resource_ids": [
+        "current-circled-toolbar"
+      ],
+      "reason": "Original upload path is not portable for solve; materialized restored bytes under .mock_data/inputs."
+    }
+  ],
+  "platform_command_reviews": [],
+  "manifest_sha256": "c35f312e4e921e690f26416b5811a752b806b14e43d282814f26551678636b46"
+}

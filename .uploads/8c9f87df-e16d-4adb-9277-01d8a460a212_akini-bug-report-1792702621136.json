@@ -1,0 +1,467 @@
+{
+ "type": "bug-report",
+ "version": "v1125",
+ "generatedAt": "2026-10-22T20:56:35.138Z",
+ "url": "https://angel-una.github.io/-/",
+ "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/27.0.1 Safari/605.1.15",
+ "screen": {
+   "width": 414,
+   "height": 896,
+   "dpr": 3,
+   "colorDepth": 24
+ },
+ "viewport": {
+   "width": 440,
+   "height": 796,
+   "scrollW": 440,
+   "scrollH": 796
+ },
+ "displayMode": "browser",
+ "deviceMemory": "unknown",
+ "hardwareConcurrency": 4,
+ "online": true,
+ "language": "zh-CN",
+ "timezone": "Asia/Shanghai",
+ "crashForensics": {
+   "lifeLog": [
+     {
+       "t": 1792702543482,
+       "ev": "boot:v1125"
+     },
+     {
+       "t": 1792702544148,
+       "ev": "boot:v1125"
+     },
+     {
+       "t": 1792702545088,
+       "ev": "load"
+     },
+     {
+       "t": 1792702545089,
+       "ev": "pageshow"
+     },
+     {
+       "t": 1792702545289,
+       "ev": "pagehide"
+     },
+     {
+       "t": 1792702545289,
+       "ev": "hidden"
+     },
+     {
+       "t": 1792702545310,
+       "ev": "boot:v1125"
+     },
+     {
+       "t": 1792702545372,
+       "ev": "load"
+     },
+     {
+       "t": 1792702545372,
+       "ev": "pageshow"
+     }
+   ],
+   "jsHeapMB": "n/a",
+   "deviceMemory": "unknown"
+ },
+ "storage": {
+   "lsTotalKeys": 88,
+   "akiniKeys": 82,
+   "lsTotalBytes": 2381,
+   "bigKeys": [],
+   "idbStatus": "unknown",
+   "idbWorks": true,
+   "storageSafeActive": true,
+   "imgWtsAvailable": true
+ },
+ "dataSnapshot": {
+   "settings": {
+     "activeMailMin": "3",
+     "activeMailMax": "6",
+     "friendsPostMin": "30",
+     "friendsPostMax": "60",
+     "icityPostMin": "30",
+     "icityPostMax": "60",
+     "replyDelayMin": "3",
+     "replyDelayMax": "7",
+     "mailDelayMin": "10",
+     "mailDelayMax": "24"
+   },
+   "avatars": {
+     "my": {
+       "exists": false,
+       "bytes": 0
+     },
+     "ta": {
+       "exists": false,
+       "bytes": 0
+     },
+     "icityMy": {
+       "exists": false,
+       "bytes": 0
+     },
+     "icityTa": {
+       "exists": false,
+       "bytes": 0
+     },
+     "s1": {
+       "exists": false,
+       "bytes": 0
+     }
+   },
+   "schedules": {
+     "nextMailAutoSend": null,
+     "mailLastSent": null,
+     "nextFriendsPost": null,
+     "lastFriendsPost": null,
+     "nextIcityPost": null,
+     "lastIcityPost": null
+   },
+   "contacts": "[{\"id\":\"ta_mvk0t3ey_6y0iuq\",\"name\":\"对方\",\"avatar\":\"\",\"note\":\"\",\"createdAt\":1792702543498,\"isDefault\":true}]",
+   "chatHistoryCount": 1,
+   "wordBankCount": 0
+ },
+ "errors": [],
+ "modules": {
+   "mailEngineLoaded": true,
+   "momentsEngineLoaded": true,
+   "storageSafeLoaded": true,
+   "backupLoaded": false,
+   "bottomBarExists": true,
+   "homeIndicatorExists": true,
+   "calTimeElementExists": true,
+   "calDateElementExists": true,
+   "calWeekdayElementExists": true,
+   "swRegistered": true
+ },
+ "lsSnapshot": {
+   "akini_toggle_keepAliveToggle": {
+     "bytes": 1,
+     "preview": "0"
+   },
+   "akini_toggle_pinyinCardToggle": {
+     "bytes": 1,
+     "preview": "0"
+   },
+   "akini_toggle_contactReplyToggle": {
+     "bytes": 1,
+     "preview": "1"
+   },
+   "akini_prob_answerCall": {
+     "bytes": 2,
+     "preview": "85"
+   },
+   "akini_halo_b": {
+     "bytes": 3,
+     "preview": "181"
+   },
+   "akini_prob_missCall": {
+     "bytes": 2,
+     "preview": "15"
+   },
+   "akini_num_friendsPostMax": {
+     "bytes": 2,
+     "preview": "60"
+   },
+   "akini_num_icityPostMin": {
+     "bytes": 2,
+     "preview": "30"
+   },
+   "akini_toggle_msgPopupToggle": {
+     "bytes": 1,
+     "preview": "0"
+   },
+   "akini_lifelog": {
+     "bytes": 321,
+     "preview": "[{\"t\":1792702543482,\"ev\":\"boot:v1125\"},{\"t\":1792702544148,\"ev\":\"boot:v1125\"},{\"t"
+   },
+   "akini_prob_groupTransferMe": {
+     "bytes": 2,
+     "preview": "15"
+   },
+   "akini_toggle_contactTransferToggle": {
+     "bytes": 1,
+     "preview": "1"
+   },
+   "akini_prob_groupCall": {
+     "bytes": 2,
+     "preview": "15"
+   },
+   "akini_num_pinyinCardMax": {
+     "bytes": 1,
+     "preview": "3"
+   },
+   "akini_prob_postWithSticker": {
+     "bytes": 2,
+     "preview": "10"
+   },
+   "akini_num_friendsPostMin": {
+     "bytes": 2,
+     "preview": "30"
+   },
+   "akini_num_mailDelayMin": {
+     "bytes": 2,
+     "preview": "10"
+   },
+   "akini_icity_diaries_backup": {
+     "bytes": 2,
+     "preview": "[]"
+   },
+   "akini_riddle_solved_v3": {
+     "bytes": 1,
+     "preview": "1"
+   },
+   "akini_halo_g": {
+     "bytes": 3,
+     "preview": "128"
+   },
+   "akini_prob_taTransfer": {
+     "bytes": 1,
+     "preview": "7"
+   },
+   "akini_prob_collectTransfer": {
+     "bytes": 2,
+     "preview": "70"
+   },
+   "akini_prob_noReply": {
+     "bytes": 2,
+     "preview": "10"
+   },
+   "akini_chat_sessions": {
+     "bytes": 76,
+     "preview": "{\"ta_mvk0t3ey_6y0iuq\":{\"unread\":0,\"lastMsg\":\"\",\"lastTime\":0,\"_seeded\":true}}"
+   },
+   "akini_toggle_readReceiptToggle": {
+     "bytes": 1,
+     "preview": "0"
+   },
+   "akini_toggle_emojiMixToggle": {
+     "bytes": 1,
+     "preview": "0"
+   },
+   "akini_num_pinyinCardMin": {
+     "bytes": 1,
+     "preview": "2"
+   },
+   "akini_preview_bubble_left": {
+     "bytes": 0,
+     "preview": ""
+   },
+   "akini_preview_bubble_right": {
+     "bytes": 0,
+     "preview": ""
+   },
+   "akini_toggle_contactIcityToggle": {
+     "bytes": 1,
+     "preview": "0"
+   },
+   "akini_prob_surveyInvite": {
+     "bytes": 2,
+     "preview": "20"
+   },
+   "akini_sw_ver": {
+     "bytes": 13,
+     "preview": "20261023v1243"
+   },
+   "akini_bubble_css": {
+     "bytes": 0,
+     "preview": ""
+   },
+   "akini_toggle_contactMailToggle": {
+     "bytes": 1,
+     "preview": "1"
+   },
+   "akini_app_version": {
+     "bytes": 4,
+     "preview": "v717"
+   },
+   "akini_num_activeMsgMax": {
+     "bytes": 2,
+     "preview": "10"
+   },
+   "akini_bubble_css_backup": {
+     "bytes": 0,
+     "preview": ""
+   },
+   "akini_num_activeMailMin": {
+     "bytes": 1,
+     "preview": "3"
+   },
+   "akini_active_chat_id": {
+     "bytes": 18,
+     "preview": "ta_mvk0t3ey_6y0iuq"
+   },
+   "akini_contacts": {
+     "bytes": 106,
+     "preview": "[{\"id\":\"ta_mvk0t3ey_6y0iuq\",\"name\":\"对方\",\"avatar\":\"\",\"note\":\"\",\"createdAt\":179270"
+   },
+   "akini_num_replyDelayMax": {
+     "bytes": 1,
+     "preview": "7"
+   },
+   "akini_toggle_contactShopToggle": {
+     "bytes": 1,
+     "preview": "0"
+   },
+   "akini_num_icityPostMax": {
+     "bytes": 2,
+     "preview": "60"
+   },
+   "akini_num_activeMailMax": {
+     "bytes": 1,
+     "preview": "6"
+   },
+   "akini_prob_groupTransferOther": {
+     "bytes": 2,
+     "preview": "15"
+   },
+   "akini_s1_migrated_v912": {
+     "bytes": 1,
+     "preview": "1"
+   },
+   "akini_prob_emoji": {
+     "bytes": 2,
+     "preview": "20"
+   },
+   "akini_prob_pinyinCard": {
+     "bytes": 2,
+     "preview": "35"
+   },
+   "akini_num_mailDelayMax": {
+     "bytes": 2,
+     "preview": "24"
+   },
+   "akini_toggle_contactPokeToggle": {
+     "bytes": 1,
+     "preview": "0"
+   },
+   "akini_chat_trace": {
+     "bytes": 261,
+     "preview": "[{\"op\":\"openChat\",\"id\":\"ta_mvk0t3ey_6y0iuq\",\"ts\":1792702545321},{\"op\":\"openChat\""
+   },
+   "akini_s1_texts": {
+     "bytes": 2,
+     "preview": "{}"
+   },
+   "akini_num_replyDelayMin": {
+     "bytes": 1,
+     "preview": "3"
+   },
+   "akini_prob_meaningfulNumber": {
+     "bytes": 2,
+     "preview": "15"
+   },
+   "akini_toggle_readNoReplyToggle": {
+     "bytes": 1,
+     "preview": "0"
+   },
+   "akini_toggle_darkModeToggle": {
+     "bytes": 1,
+     "preview": "0"
+   },
+   "akini_v1127_first_kick": {
+     "bytes": 1,
+     "preview": "1"
+   },
+   "akini_prob_groupAtMe": {
+     "bytes": 2,
+     "preview": "15"
+   },
+   "akini_prob_replySticker": {
+     "bytes": 2,
+     "preview": "20"
+   },
+   "akini_next_friendsInteract": {
+     "bytes": 13,
+     "preview": "1792702608508"
+   },
+   "akini_prob_shopCard": {
+     "bytes": 2,
+     "preview": "20"
+   },
+   "akini_icity_diaries": {
+     "bytes": 2,
+     "preview": "[]"
+   },
+   "akini_device_id": {
+     "bytes": 21,
+     "preview": "dev_mvk0t3en_dkqot3gh"
+   },
+   "akini_halo_r": {
+     "bytes": 3,
+     "preview": "255"
+   },
+   "akini_last_friendsInteract": {
+     "bytes": 13,
+     "preview": "1792702548507"
+   },
+   "akini_swap_avatar_pos": {
+     "bytes": 1,
+     "preview": "0"
+   },
+   "akini_ne_sid": {
+     "bytes": 16,
+     "preview": "FSM1M1F8vf0GLQOq"
+   },
+   "akini_prob_incomingCall": {
+     "bytes": 2,
+     "preview": "10"
+   },
+   "akini_toggle_timestampToggle": {
+     "bytes": 1,
+     "preview": "1"
+   },
+   "akini_num_activeMsgMin": {
+     "bytes": 1,
+     "preview": "5"
+   },
+   "akini_prob_groupAtOther": {
+     "bytes": 1,
+     "preview": "5"
+   },
+   "akini_prob_poke": {
+     "bytes": 1,
+     "preview": "3"
+   },
+   "akini_toggle_quoteReplyToggle": {
+     "bytes": 1,
+     "preview": "0"
+   },
+   "akini_toggle_contactActiveMsgToggle": {
+     "bytes": 1,
+     "preview": "0"
+   },
+   "akini_contacts_migrated": {
+     "bytes": 1,
+     "preview": "1"
+   },
+   "akini_prob_emojiMixMsg": {
+     "bytes": 2,
+     "preview": "20"
+   },
+   "akini_toggle_contactFriendsToggle": {
+     "bytes": 1,
+     "preview": "0"
+   },
+   "akini_prob_quote": {
+     "bytes": 2,
+     "preview": "30"
+   },
+   "akini_prob_replyCall": {
+     "bytes": 2,
+     "preview": "10"
+   },
+   "akini_prob_version": {
+     "bytes": 13,
+     "preview": "v20260929zzzs"
+   },
+   "akini_prob_refundTransfer": {
+     "bytes": 2,
+     "preview": "30"
+   },
+   "akini_toggle_pushNotifyToggle": {
+     "bytes": 1,
+     "preview": "0"
+   }
+ }
+}
