@@ -51,8 +51,6 @@
         try {
           if (window[cfg.apply]) window[cfg.apply](url);
         } catch (e1) {}
-        var st = document.getElementById(cfg.style);
-        var okCss = !!(st && st.textContent && st.textContent.indexOf(String(url).slice(0, 40)) >= 0);
         for (var i = 0; i < cfg.keys.length; i++) {
           try {
             localStorage.setItem(cfg.keys[i], url);

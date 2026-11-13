@@ -8,7 +8,6 @@
 (function () {
   function fit() {
     try {
-      var pf = document.getElementById("phoneFrame") || document.body;
       var cw = document.querySelector(".content-wrapper");
       if (!cw) return;
 

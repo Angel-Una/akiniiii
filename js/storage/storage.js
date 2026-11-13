@@ -16,7 +16,6 @@
       var migrated = 0;
       var freedBytes = 0;
       var keysToCheck = [];
-      var totalBytes = 0;
       for (var idx = 0; idx < totalKeys; idx++) {
         try {
           var k = origKey ? origKey.call(rawLS, idx) : rawLS.key(idx);
@@ -111,7 +110,6 @@
       try {
         rawLS.setItem(_MIG_FLAG, "1");
       } catch (e) {}
-      _lsImgUsed = -1;
     } catch (e) {}
   }
 
@@ -544,7 +542,6 @@
     try {
       if (origSet) origSet.call(rawLS, k, v);
       else rawLS.setItem(k, v);
-      if (isImgKey(k)) _lsImgUsed = -1;
       return true;
     } catch (e) {
       // 配额满（QuotaExceededError）：清理大体积图片键后重试，避免关键数据静默丢失
@@ -625,7 +622,6 @@
     }
   }
   function lsRemoveRaw(k) {
-    if (isImgKey(k)) _lsImgUsed = -1;
     try {
       if (origRemove) origRemove.call(rawLS, k);
       else rawLS.removeItem(k);
@@ -643,27 +639,6 @@
       }
     } catch (e) {}
     return out;
-  }
-  /* LS 里图片键当前占用的字符数。-1 表示未知（写入/删除图片后置为 -1 下次重算）。
-     恢复回填时用它保证 LS 图片总量不超过 1.4MB，剩余配额留给文字/名字/设置，
-     否则图片一多就把配额占满，所有文字类写入失败 → 刷新后"文字、昵称、设置全消失"。 */
-  var _lsImgUsed = -1;
-  /* LS 总字节数：旧代码对「每个需要回填的键」都全量遍历 localStorage 并逐个读值求和，
-     N 个键 × 整个 LS = 启动期 O(N²) 同步读盘，安卓切后台重进时直接把主线程卡死。
-     这里进程内只算一次。 */
-  var _lsTotCache = -1;
-  function _lsTotalLen() {
-    if (_lsTotCache >= 0) return _lsTotCache;
-    var tot = 0;
-    try {
-      for (var i = 0; i < rawLS.length; i++) {
-        var k = origKey ? origKey.call(rawLS, i) : rawLS.key(i);
-        var v = origGet ? origGet.call(rawLS, k) : rawLS.getItem(k);
-        if (v && typeof v === "string") tot += v.length;
-      }
-    } catch (e) {}
-    _lsTotCache = tot;
-    return tot;
   }
   /* 媒体驻留预算：essential 只决定后淘汰，不再绕过预算。 */
   var _bootTight = false;
@@ -1751,7 +1726,6 @@ window.__akiniRestoreSettled = true;
                     queueIdbWrite(k, v);
                     clearDirty(k);
                   } else if (_isEssentialImgKey(k) || _isEssentialTextKey(k) || _keepInLs(k)) {
-                    var _lsFull = _lsTotalLen() > 3600 * 1024;
                     var _imgBudgetFull = false;
                     if (isImgKey(k)) {
                       _imgBudgetFull = true;
@@ -2045,7 +2019,6 @@ _reconciledKeys = {};
             }
           }
         }
-        if (isImgKey(k)) _lsImgUsed = -1;
         // 2) 镜像层失败无所谓，绝不影响数据本体
         try {
           if (self.isCritical(k)) {
@@ -2337,11 +2310,6 @@ window.__akiniRestoreSettled = true;
   window.__akiniOnHidden(function () { flushIdbQueue(); });
 
   // ---- 去重清理：同一份数据只保留主键，删除旧版本留下的多层重复副本 ----
-  function _isDerivedDupKey(k) {
-    if (!k) return false;
-    var ks = String(k);
-    return false;
-  }
   function _primaryOfBackup(k) {
     var ks = String(k);
     /* 快照类键即使以 _backup 结尾也不能当成可删副本 */
@@ -2371,22 +2339,18 @@ window.__akiniRestoreSettled = true;
       }
       lsk.forEach(function (key) {
         var drop = false;
-        if (_isDerivedDupKey(key)) {
-          drop = true;
-        } else {
-          var pk = _primaryOfBackup(key);
-          if (pk) {
-            var pv = null;
+        var pk = _primaryOfBackup(key);
+        if (pk) {
+          var pv = null;
+          try {
+            pv = memGet(pk);
+          } catch (e) {}
+          if (!_isRealVal(pv)) {
             try {
-              pv = memGet(pk);
+              pv = localStorage.getItem(pk);
             } catch (e) {}
-            if (!_isRealVal(pv)) {
-              try {
-                pv = localStorage.getItem(pk);
-              } catch (e) {}
-            }
-            drop = _isRealVal(pv);
           }
+          drop = _isRealVal(pv);
         }
         if (!drop) return;
         try {
@@ -2417,7 +2381,7 @@ window.__akiniRestoreSettled = true;
     try {
       IDB.keys(function (keys) {
         var list = (keys || []).filter(function (key) {
-          return _isDerivedDupKey(key) || !!_primaryOfBackup(key);
+          return !!_primaryOfBackup(key);
         });
         if (!list.length) {
           finish();
@@ -2637,7 +2601,6 @@ window.__akiniRestoreSettled = true;
 
   // ---- 构造快照 ----
   var _cur = null; // 当前已知的最近快照（LS 启动快照 + 运行期更新）
-  var _lastSig = "";
   function buildSnap(prev, now, recordDel) {
     var keys = collectKeys();
     var deferred = window.__akiniDeferredKeys || {};
@@ -2725,21 +2688,7 @@ window.__akiniRestoreSettled = true;
     }
   }
 
-  function sigOf() {
-    var keys = collectKeys();
-    var total = 0,
-      sig = keys.length + ":";
-    for (var i = 0; i < keys.length; i++) {
-      var k = keys[i];
-      var v = memGet(k);
-      if (typeof v !== "string" || v === "") v = rawGet(k);
-      total += typeof v === "string" ? v.length : 0;
-      sig += k.length + ",";
-    }
-    return sig + "#" + total;
-  }
-
-  function takeSnapshot(force, sig) {
+  function takeSnapshot(force) {
     if (!store()) return;
     if (window.__akiniWiping) return;
     if (!force && !window.__akiniRestoreSettled) return; // 启动对账完成前不写快照，防止用默认值覆盖
@@ -2748,9 +2697,6 @@ window.__akiniRestoreSettled = true;
       var snap = buildSnap(_cur, now, !!force);
       _cur = snap;
       persistSnap(snap);
-      _lastSig = typeof sig === "string" ? sig : sigOf();
-      
-
     } catch (e) {}
   }
 

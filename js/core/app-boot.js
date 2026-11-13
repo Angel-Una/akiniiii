@@ -1204,7 +1204,6 @@ window._akiniActiveMsgAction = null;
                       "</span>"
                     : "";
             var c,
-              s,
               l = a.img
                 ? '<div style="width:56px;height:56px;border-radius:6px;overflow:hidden;flex-shrink:0;background:#eee;"><img src="' +
                   a.img +
@@ -1215,7 +1214,6 @@ window._akiniActiveMsgAction = null;
             ((n.innerHTML =
               '<div style="width:40px;height:40px;border-radius:50%;background:#eee;overflow:hidden;flex-shrink:0;display:flex;align-items:center;justify-content:center;">' +
               ((c = "string" == typeof e.avatar ? e.avatar : ""),
-              (s = 40),
               (c && 0 === c.indexOf("data:")
                 ? '<img src="' + c + '" style="width:100%;height:100%;object-fit:cover;border-radius:50%;" alt=""/>'
                 : window.__akiniLineAvatarImg

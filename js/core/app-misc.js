@@ -116,15 +116,6 @@
     var def = contacts[0];
     return def && def.id ? def.id : null;
   }
-  function getContactById(id) {
-    if (window.akiniContacts && window.akiniContacts.getChatTarget) {
-      var api = window.akiniContacts.getChatTarget(id);
-      if (api) return api;
-    }
-    var contacts = getContacts();
-    for (var i = 0; i < contacts.length; i++) if (contacts[i].id === id) return contacts[i];
-    return null;
-  }
   window.__akAvatarPH =
     (window.__akiniLineAvatarImg ? window.__akiniLineAvatarImg() : "") ||
     '<span style="display:inline-flex;width:100%;height:100%;align-items:center;justify-content:center;background:#ececec;border-radius:50%"></span>';

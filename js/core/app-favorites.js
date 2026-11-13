@@ -77,21 +77,6 @@
     return null;
   }
 
-  // 随机选择一个“创建的联系人”（排除系统 me/my），用于收藏归属
-
-  function avatarHtml(c, size) {
-    size = size || 48;
-    return (
-      '<div style="width:' +
-      size +
-      "px;height:" +
-      size +
-      'px;border-radius:50%;overflow:hidden;display:flex;align-items:center;justify-content:center;background:#f0f0f0;flex-shrink:0;">' +
-      (window.renderAvatarHtml ? window.renderAvatarHtml((c && c.avatar) || "", size) : "") +
-      "</div>"
-    );
-  }
-
   /* ============ 收藏存储（按联系人维度） ============ */
   function storageKey(contactId) {
     return "akini_ta_phone_" + contactId;

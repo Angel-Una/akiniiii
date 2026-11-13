@@ -48,32 +48,20 @@ window.editCalCustomText = function () {
   var el = document.getElementById("calCustomCenter");
   if (!el) return;
   var cur = el.textContent || "xxx";
-  {
-    window.__akiniPromptModal(
-      "日历中间自定义文字",
-      "请输入自定义文字",
-      function (val) {
-        if (val !== null && String(val).trim() !== "") {
-          var str = String(val).trim();
-          el.textContent = str;
-          try {
-            localStorage.setItem("akini_cal_custom_center", str);
-          } catch (e) {}
-        }
-      },
-      { value: cur === "xxx" ? "" : cur, maxLength: 30 },
-    );
-    return;
-  }
-  try {
-    var val = prompt("请输入日历中间自定义文字：", cur === "xxx" ? "" : cur);
-    if (val !== null && val.trim() !== "") {
-      el.textContent = val.trim();
-      try {
-        localStorage.setItem("akini_cal_custom_center", val.trim());
-      } catch (e) {}
-    }
-  } catch (e) {}
+  window.__akiniPromptModal(
+    "日历中间自定义文字",
+    "请输入自定义文字",
+    function (val) {
+      if (val !== null && String(val).trim() !== "") {
+        var str = String(val).trim();
+        el.textContent = str;
+        try {
+          localStorage.setItem("akini_cal_custom_center", str);
+        } catch (e) {}
+      }
+    },
+    { value: cur === "xxx" ? "" : cur, maxLength: 30 },
+  );
 };
 
 /* 时间模块每秒刷新，确保永远实时；独立 IIFE 保护，不受其他启动脚本异常影响 */
@@ -194,40 +182,6 @@ document.addEventListener("click", function (e) {
     });
   }
 });
-
-window.compressImageDataUrl = function (dataUrl, callback, opts) {
-  if (!dataUrl || typeof dataUrl !== "string" || dataUrl.length < 400000) {
-    if (typeof callback === "function") callback(dataUrl);
-    return;
-  }
-  var img = new Image();
-  img.onload = function () {
-    try {
-      var maxWidth = (opts && opts.maxSide) || 800;
-      var quality = (opts && opts.quality) || 0.7;
-      var width = img.naturalWidth || img.width;
-      var height = img.naturalHeight || img.height;
-      if (width > maxWidth) {
-        height = Math.round((height * maxWidth) / width);
-        width = maxWidth;
-      }
-      var canvas = document.createElement("canvas");
-      canvas.width = width;
-      canvas.height = height;
-      var ctx = canvas.getContext("2d");
-      ctx.imageSmoothingEnabled = true;
-      ctx.imageSmoothingQuality = "high";
-      ctx.drawImage(img, 0, 0, width, height);
-      callback(canvas.toDataURL("image/jpeg", quality));
-    } catch (e) {
-      callback(dataUrl);
-    }
-  };
-  img.onerror = function () {
-    callback(dataUrl);
-  };
-  img.src = dataUrl;
-};
 
 window.triggerPickImage = function (targetKey, callback) {
   var input = document.getElementById("akini_universal_picker");

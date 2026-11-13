@@ -134,9 +134,6 @@
         }
         return Object.prototype.hasOwnProperty.call(window.__akiniImgCache, k);
       }),
-      (window.__akiniImgCacheStats = function () {
-        return { bytes: _imgCacheBytes, budget: 8388608, entries: Object.keys(window.__akiniImgCache || {}).length };
-      }),
       (window.__akiniImgSet = function (t, e) {
         window.__akiniImgCachePut(t, e);
         function lsFb() {

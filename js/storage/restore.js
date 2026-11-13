@@ -76,21 +76,6 @@
     },
     true,
   );
-  function it(t, e) {
-    if (((e = e || ""), !t || "string" != typeof t)) return __akiniAvOrLine(e);
-    t = t.trim();
-    if (!t) return __akiniAvOrLine(e);
-    if (0 === t.indexOf("<img")) {
-      var n = t.match(/src="([^"]*)"/);
-      if (!n || !n[1]) return __akiniAvOrLine(e);
-      t = n[1];
-    }
-    return 0 === t.indexOf("data:") || 0 === t.indexOf("http")
-      ? '<img src="' +
-          t.replace(/"/g, "&quot;") +
-          '" style="width:100%;height:100%;object-fit:cover;border-radius:50%;">'
-      : __akiniAvOrLine(t);
-  }
 })();
 
 /* 背景图恢复 */
@@ -620,30 +605,6 @@ window.__akiniRestoredDone = true;
   window.__akiniOnHidden(function () { 
       try {
         mirrorIcons();
-      } catch (e) {}
-     });
-
-  (function () {
-    var modal = document.getElementById("mailDetailModal");
-    if (!modal) return;
-    function visible() {
-      try {
-        return getComputedStyle(modal).display !== "none" && modal.offsetParent !== null;
-      } catch (e) {
-        return false;
-      }
-    }
-    /* 已读语义调整：仅点开某封信才标记该封已读，不再整箱标记 */
-  })();
-
-  function syncSentMailStatus() {
-    /* 寄出的信仅在对方回信真正投递（app.js checkStatus）时才置为已读，不再按时间自动置读 */
-    return;
-  }
-  syncSentMailStatus();
-  window.__akiniOnVisible(function () { 
-      try {
-        syncSentMailStatus();
       } catch (e) {}
      });
 })();

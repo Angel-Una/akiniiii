@@ -289,43 +289,11 @@ window.__akiniResolvePostImgs = function (root) {
   (function () {
   var k, U, W, nt, it, at, dt, ut, yt, At, Tt, Mt, Dt, Ht, Ft, Wt, ue, ge, ye, pe, _e, he, ve, be, Se, Ie, Ce, Ee, Ae, ze, Ke, fn, kn, In, xn, Cn;
   let jn, qn, Jn, Gn, Un, Wn, Kn, Qn, Zn, ti, ei, ni, ii, ai, oi, ri, si, li, di, ui, mi, wi, gi, fi, yi, pi, _i, hi, vi, ki, bi, Si, Ii, xi, Ci, Ei, Ai, Ti, Mi, Bi, Li, Di, Pi, Ni, Oi, $i, Yi, Vi, Xi, Qi, Zi, ta, ea, na, ia, aa, oa, ca, da;
-function t(t) {
-        try {
-          if (window.navTo) return void window.navTo(t);
-          if (window.openAppPage) return void window.openAppPage(t);
-          if ("icity" === t) return void (window.showArea && window.showArea("icityArea"));
-          (window.showPage && window.showPage(t), "mail" === t && window.__renderMail && window.__renderMail());
-        } catch (t) {
-          console.error("[nav] openAppPage failed", t);
-        }
-      }
 function e(t) {
         try {
           window.showArea && window.showArea(t);
         } catch (t) {
           console.error("[nav] showArea failed", t);
-        }
-      }
-function n(t, e) {
-        var n = document.getElementById(t);
-        if (n) {
-          n.setAttribute("data-bound", "1");
-          var i = 0;
-          n.addEventListener(
-            "click",
-            function (t) {
-              var n = Date.now();
-              if (!(n - i < 120)) {
-                i = n;
-                try {
-                  e();
-                } catch (t) {
-                  console.error("[nav] handler error", t);
-                }
-              }
-            },
-            !0,
-          );
         }
       }
 function i(t, e) {
@@ -1537,16 +1505,6 @@ function j(t, e, n, i) {
             }
           }
         }
-      }
-function q(t) {
-        try {
-          var e = (window.__akiniPendingReplyMap || {})[t];
-          if (!e || e.settling) return;
-          ((e.settling = !0), e.timer && (clearTimeout(e.timer), (e.timer = null)));
-          try {
-            J(t);
-          } catch (t) {}
-        } catch (t) {}
       }
 function J(t) {
         if (window.__akiniToggleOn && !window.__akiniToggleOn("contactActiveMsgToggle", !1)) {
@@ -2760,14 +2718,6 @@ function et(t, e) {
         try {
           if (window.__akiniChatLog) window.__akiniChatLog.schedule(t);
         } catch (_eLog) {}
-      }
-function ot(t) {
-        return (
-          it.indexOf(t) > -1 ||
-          at.some(function (e) {
-            return 0 === t.indexOf(e);
-          })
-        );
       }
 function rt(t, e, n) {
         var i = /_(bg|img|stickers)$/.test(t),
@@ -4121,12 +4071,6 @@ function $t(t) {
             window.akiniStore.memorySet("akini_chat_pins", JSON.stringify(e));
           } catch (t) {}
         window.akiniStore && window.akiniStore.setJson && window.akiniStore.setJson("akini_chat_pins", e);
-      }
-function Yt(t) {
-        var e = Kt();
-        if (!e) return !1;
-        var n = e.indexOf(t);
-        return (n >= 0 && (e.splice(n, 1), $t(e)), !1);
       }
 function Vt() {
         return Kt();
@@ -7495,17 +7439,7 @@ function An(t) {
                 localStorage.setItem(t, e);
               } catch (t) {}
           }
-          function c(t) {
-            return null == t || "" === t || "null" === t || "undefined" === t || "[]" === t || "{}" === t;
-          }
-          function s(t) {
-            return (
-              "akini_localstorage_snapshot" === t ||
-              "akini_localstorage_snapshot_backup" === t ||
-              "akini_idb_full_snapshot" === t
-            );
-          }
-          var l = 153600;
+                              var l = 153600;
           return {
             set: function (t, e, n) {
               if (window.__akiniWiping) "function" == typeof n && n();
@@ -13556,11 +13490,6 @@ ki = document.getElementById("changeChatWallpaperBtn"),
                   console.warn("renderExclContacts", t);
                 }
               }),
-              (window.__wbRenderExcl = function () {
-                try {
-                  Y();
-                } catch (t) {}
-              }),
               c(j, function () {
                 window.__wbOpenExclusive();
               })));
@@ -14913,25 +14842,7 @@ Ke = null;
         }),
         window.startCall,
         (function () {
-          function t(t) {
-            try {
-              var e = null;
-              (Ai && !Ai.answered && (e = Ai.isMyCalling ? "cancel" : "me_reject"), Ge(e));
-            } catch (t) {
-              console.error("Hangup Se error:", t);
-            } finally {
-              Ai && ((Ai.active = !1), (Ai.answered = !1), (Ai.isMinimized = !1));
-              var n = document.getElementById("app-call");
-              n && ((n.style.display = "none"), n.classList.remove("call-expanded"));
-              var i = document.getElementById("callMiniWindow");
-              i && (i.style.display = "none");
-              try {
-                var a = document.body;
-                a && "hidden" === a.style.overflow && (a.style.overflow = "");
-              } catch (t) {}
-            }
-          }
-                    // 挂断/接听/最小化按钮的绑定统一在下方 c(...) 里做一次；
+                              // 挂断/接听/最小化按钮的绑定统一在下方 c(...) 里做一次；
           // 这里不再重复绑 click/touchend/pointerup，否则一次点击会触发 3~4 次挂断
         })(),
         c(Ii, tn));
@@ -17474,17 +17385,7 @@ Vi = document.getElementById("transferBtn"),
                     document.body.removeChild(e));
                 }
               }
-              function v(t, e, n, i, a, o, r) {
-                (o &&
-                  o.forEach(function (t, e) {
-                    void 0 !== r[e] && __akiniGuardSrc(t, r[e]);
-                  }),
-                  (t.style.width = e),
-                  t.parentNode && (t.parentNode.style.maxWidth = n),
-                  t.parentNode && (t.parentNode.style.opacity = ""),
-                  p(i, a));
-              }
-            })(),
+                          })(),
             document.querySelectorAll(".icity-nav-btn").forEach(function (t) {
               c(t, function () {
                 window.akiniGoIcityTab(t.getAttribute("data-tab"));
@@ -20557,61 +20458,7 @@ window.__akiniPatchAvatarCell = function (t, e) {
                   : a();
               } catch (t) {}
             })());
-          function r() {
-            return localStorage.getItem("akini_icity_my_nick") || "我";
-          }
-          function c(t) {
-            for (
-              var e = (function () {
-                  var t = r(),
-                    e = [];
-                  return (
-                    window.akiniContacts &&
-                      window.akiniContacts.getContacts().forEach(function (t) {
-                        var n = getIcityContactProfile(t.id);
-                        (n && n.name && e.push(n.name), t.name && e.push(t.name));
-                      }),
-                    e.push(localStorage.getItem("akini_icity_ta_nick") || "对方"),
-                    {
-                      myName: t,
-                      taNames: e,
-                    }
-                  );
-                })(),
-                n = e.myName,
-                i = e.taNames,
-                a = t.comments || [],
-                o = -1,
-                c = a.length - 1,
-                s = !1;
-              c >= 0;
-              c--
-            )
-              (i.indexOf(a[c].author) >= 0 && (o = c), a[c].author === n && (s = !0));
-            if (!s) return o < 0;
-            if (o < 0) return !0;
-            var l = a[o].author;
-            for (c = o + 1; c < a.length; c++) if (a[c].author === n && a[c].replyTo === l) return !0;
-            return !1;
-          }
-          function s(t) {
-            return !(!t || !t.authorId) && !!window.akiniContacts && !!window.akiniContacts.getContactById(t.authorId);
-          }
-          function d(t) {
-            if (t && t.authorId) {
-              var e = getIcityContactProfile(t.authorId);
-              if (e && e.name)
-                return {
-                  name: e.name,
-                  avatar: e.avatar || M(),
-                };
-            }
-            return {
-              name: localStorage.getItem("akini_icity_ta_nick") || localStorage.getItem("akini_ta_name") || "对方",
-              avatar: localStorage.getItem("akini_icity_ta_avatar") || localStorage.getItem("akini_ta_avatar") || "",
-            };
-          }
-          ((window.scheduleTaLikeSoon = function (t) {}),
+                                        ((window.scheduleTaLikeSoon = function (t) {}),
             (window.scheduleTaCommentSoon = function (t) {}));
         })(),
         (function () {
@@ -20761,70 +20608,7 @@ window.__akiniPatchAvatarCell = function (t, e) {
               }
             }
           }
-          function u(t, e, n) {
-            if (!t.__nePainting) {
-              ((t.__nePainting = 1),
-                setTimeout(function () {
-                  t.__nePainting = 0;
-                }, 0));
-              var i = l() || [],
-                a = {},
-                o = {};
-              i.forEach(function (t) {
-                (t && t.neId && (a[String(t.neId)] = t), t && (o[String(t.name)] = t));
-              });
-              var r =
-                '<div style="display:flex;flex-direction:column;gap:8px;padding:12px;border-radius:12px;background:#f8f8f8;border:1px solid #f0f0f0"><div style="display:flex;justify-content:space-between;align-items:center"><div style="font-size:13px;font-weight:600;color:#1a1a1a">我的歌单（' +
-                e.length +
-                '）</div><button id="nePlRefresh" type="button" style="border:1px solid #e0e0e0;border-radius:8px;background:#fff;font-size:12px;color:#555;padding:4px 10px;cursor:pointer">刷新</button></div>';
-              (e.length ||
-                (r += '<div style="font-size:12px;color:#999;text-align:center;padding:8px">账号里还没有歌单</div>'),
-                e.forEach(function (t, e) {
-                  var n = a[String(t.id)] || o[String(t.name)],
-                    i = !!n,
-                    c = i ? (n.tracks || []).length : t.trackCount || 0;
-                  r +=
-                    '<div style="display:flex;align-items:center;gap:10px;padding:8px;background:#fff;border-radius:10px;border:1px solid #eee"><img src="' +
-                    (t.coverImgUrl || "") +
-                    '" style="width:38px;height:38px;border-radius:8px;object-fit:cover;background:#eee;flex-shrink:0" onerror="this.style.visibility=\'hidden\'"/><div style="flex:1;min-width:0"><div style="font-size:13px;color:#1a1a1a;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' +
-                    String(t.name || "") +
-                    '</div><div style="font-size:11px;color:#999;margin-top:2px">' +
-                    (i ? "已导入 · 本地 " + c + " 首" : "未导入 · 共 " + c + " 首") +
-                    '</div></div><button type="button" data-nepl-import="' +
-                    e +
-                    '" style="flex-shrink:0;height:32px;padding:0 14px;border:none;border-radius:8px;background:#1a1a1a;color:#fff;font-size:12px;cursor:pointer">' +
-                    (i ? "更新" : "导入") +
-                    "</button></div>";
-                }),
-                (r +=
-                  '<div style="font-size:11px;color:#999;line-height:1.5">点「导入」抓取该歌单；改动后点「更新」同步；app 删除歌单后点「刷新」自动清理本地。</div></div>'),
-                (t.innerHTML = r));
-              var c = document.getElementById("nePlRefresh");
-              (c &&
-                c.addEventListener("click", function () {
-                  m(!0);
-                }),
-                t.querySelectorAll("[data-nepl-import]").forEach(function (t) {
-                  t.addEventListener("click", function () {
-                    var n = e[parseInt(t.getAttribute("data-nepl-import"), 10)];
-                    n &&
-                      ((t.textContent = "导入中…"),
-                      (t.disabled = !0),
-                      g(String(n.id), n.name, !1)
-                        .then(function () {
-                          ((t.textContent = "已更新"),
-                            setTimeout(function () {
-                              m();
-                            }, 600));
-                        })
-                        .catch(function () {
-                          ((t.textContent = "重试"), (t.disabled = !1));
-                        }));
-                  });
-                }));
-            }
-          }
-          function m() {
+                    function m() {
             return Promise.resolve();
           }
           try {
@@ -21109,35 +20893,7 @@ window.__akiniPatchAvatarCell = function (t, e) {
                 n || (D.importBtn && (D.importBtn.textContent = "导入"));
               });
           }
-                    function f(t, e) {
-            e = e || "";
-            var n = [],
-              i = 0;
-            if (!t || !t.length) return n;
-            !(function a() {
-              if (i >= t.length)
-                return n.length
-                  ? (rt(n), w(), void alert("已合并导入全部歌单，共 " + n.length + " 首"))
-                  : void alert("没有导入任何歌曲");
-              var o = t[i];
-              i++;
-              var r = o.id || o;
-              r
-                ? g(r, e, !0)
-                    .then(function (t) {
-                      (t &&
-                        t.forEach(function (t) {
-                          n.push(t);
-                        }),
-                        setTimeout(a, 200));
-                    })
-                    .catch(function (t) {
-                      setTimeout(a, 200);
-                    })
-                : a();
-            })();
-          }
-          function y() {
+                              function y() {
             if (!D.lyricsBody) return;
             if (!K.length) {
               return (
@@ -21853,9 +21609,6 @@ window.__akiniPatchAvatarCell = function (t, e) {
                     a && (a.style.display = "flex");
                   }
                 }
-              }),
-              (window._ensureMusicContactsSelected = function () {
-                return rt.length > 0 || (S(), !1);
               }),
               D.menuOverlay &&
                 D.menuOverlay.addEventListener("click", function (t) {
@@ -22831,13 +22584,6 @@ window.__akiniPatchAvatarCell = function (t, e) {
               }
             }
           }, 1e4),
-            (window.__akiniSetMusicListenTogether = function (t, e) {
-              try {
-                if (!t) return;
-                ((et[t] = parseInt(e, 10) || 0),
-                  localStorage.setItem("akini_music_listen_together", JSON.stringify(et)));
-              } catch (t) {}
-            }),
             window.__akiniOnHidden(function () { 
                   if (H && Y) {
                     try {
@@ -23071,7 +22817,6 @@ window.__akiniPatchAvatarCell = function (t, e) {
                               !F.paused &&
                               (!F._stallRecoverAt || t - F._stallRecoverAt > 3e4) &&
                               ((F._stallRecoverAt = t),
-                              (F.currentTime = F.currentTime),
                               F.play().catch(function () {}));
                           } catch (t) {}
                         }, 2500));
@@ -23683,81 +23428,9 @@ window.__akiniPatchAvatarCell = function (t, e) {
         console.log("[Akini] 0825s build - DOMContentLoaded 执行完毕 ✅"));
     } catch (t) {}
   var Mn, Bn, Ln, Dn, Pn, Nn, On, Rn;
-  (!(function () {
-      var t = document.getElementById("musicInviteOverlay"),
-        e = document.getElementById("musicInviteWaitingOverlay");
-      function n() {
-        var t = (window.getContacts && window.getContacts()) || [];
-        return t.length ? t[Math.floor(Math.random() * t.length)] : null;
-      }
-      function i(t, e) {
-        t &&
-          (e
-            ? 0 === String(e).indexOf("data:") || 0 === String(e).indexOf("http")
-              ? __akiniGuardHtml(t, '<img src="' + e + '" style="width:100%;height:100%;object-fit:cover">')
-              : (t.textContent = e)
-            : (t.textContent = ""));
-      }
-      ((window._showMusicInviteWithContact = function (e) {
-          if (e) {
-            var n = window.getMyAvatar ? window.getMyAvatar() : "",
-              a = document.getElementById("musicInviteFromAvatar"),
-              o = document.getElementById("musicInviteMyAvatar"),
-              r = document.getElementById("musicInviteFromName"),
-              c = document.getElementById("musicInviteFromName2");
-            (i(a, e.avatar),
-              i(o, n),
-              r && (r.textContent = e.name),
-              c && (c.textContent = e.name),
-              t && (t.style.display = "flex"));
-          } else console.log("[MusicInvite] no contacts");
-        }),
-        (window._hideMusicInvite = function () {
-          t && (t.style.display = "none");
-        }),
-        (window._hideMusicInviteWaiting = function () {
-          e && (e.style.display = "none");
-        }));
-      var a = document.getElementById("musicInviteRejectBtn");
-      a &&
-        a.addEventListener("click", function () {
-          (window._hideMusicInvite(), window._showMusicContactPicker && window._showMusicContactPicker());
-        });
-      var o = document.getElementById("musicInviteAcceptBtn");
-      (o &&
-        o.addEventListener("click", function () {
-          var t = n();
-          if (t)
-            try {
-              localStorage.setItem("akini_music_selected_contacts", JSON.stringify([t]));
-            } catch (t) {}
-          (window._hideMusicInvite(), window._showMusicContactPicker && window._showMusicContactPicker());
-        }),
-        (window._tryRandomMusicInvite = function () {
-          try {
-            "1" === localStorage.getItem("akini_music_listening_active") ||
-              (document.getElementById("app-music") && "flex" === document.getElementById("app-music").style.display);
-          } catch (t) {}
-        }));
-      try {
-        window._musicInviteTimer && (clearInterval(window._musicInviteTimer), (window._musicInviteTimer = null));
-      } catch (t) {}
-      try {
-        if (!window.__musicInviteHooked) {
-          window.__musicInviteHooked = !0;
-          var r = document.getElementById("sendBtn");
-          r &&
-            r.addEventListener("click", function () {
-              try {
-                window._tryRandomMusicInvite();
-              } catch (t) {}
-            });
-        }
-      } catch (t) {}
-    })(),
+
       (function () {
-        function t(t) {}
-                try {
+                        try {
           [
             "appBtnChat",
             "appBtnFriends",
@@ -23778,7 +23451,7 @@ window.__akiniPatchAvatarCell = function (t, e) {
         } catch (t) {
           t.message;
         }
-      })());
+      })();
   try {
       var Hn = null;
       function Fn() {
