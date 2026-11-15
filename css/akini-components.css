@@ -157,21 +157,6 @@ html body #app-chat .chat-body .msg-row.system.msg-row.system .bubble:not(.trans
    该卡片本身不参与自定义气泡美化，直接隐藏占位即可。 */
 html body #app-chat .chat-body .msg-row .bubble.music-recommend-bubble > .bubble-widget { display:none !important; }
 
-/* 陪伴 / 观影气泡统一为微信默认样式（与主聊天一致） */
-html body:not(.bubble-css-on):not(.bubble-pink):not(.bubble-blue):not(.bubble-green):not(.bubble-black) #companionMsgs#companionMsgs .msg-row.me .bubble:not(.transfer-bubble):not(.sticker-bubble):not(.survey-bubble):not(.shop-card-bubble),
-html body:not(.bubble-css-on):not(.bubble-pink):not(.bubble-blue):not(.bubble-green):not(.bubble-black) #watchChatBody#watchChatBody .msg-row.me .bubble:not(.transfer-bubble):not(.sticker-bubble):not(.survey-bubble):not(.shop-card-bubble) {
-  padding:9px 12px !important;
-  box-shadow:0 2px 8px rgba(0,0,0,.2) !important;
-}
-html body:not(.bubble-css-on) #companionMsgs#companionMsgs .msg-row:not(.me) .bubble:not(.transfer-bubble):not(.shop-card-bubble):not(.survey-bubble):not(.img-bubble):not(.video-bubble):not(.voice-bubble):not(.sticker-bubble),
-html body:not(.bubble-css-on) #watchChatBody#watchChatBody .msg-row:not(.me) .bubble:not(.transfer-bubble):not(.shop-card-bubble):not(.survey-bubble):not(.img-bubble):not(.video-bubble):not(.voice-bubble):not(.sticker-bubble) {
-  background:#fff !important;
-  background-color:#fff !important;
-  color:#1a1a1a !important;
-  border:1px solid #ececec !important;
-  padding:9px 12px !important;
-}
-
 /* 组件样式 */
 /* 直接更换输入框立即可点 */
 .s1-direct-input{position:absolute!important;top:0!important;left:0!important;width:100%!important;height:100%!important;opacity:0!important;cursor:pointer!important;z-index:20!important;font-size:999px!important;}
