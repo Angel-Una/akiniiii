@@ -557,6 +557,7 @@
       if (!ta || !ta.id) return false;
       var track = picked.track || {};
       var title = String(track.title || track.name || "未知歌曲");
+      var artist = String(track.artist || "未知歌手");
       var cover = track.cover || track.pic || window.__akiniDefaultCover || "";
       var coverHtml = cover
         ? '<img src="' + escapeCardHtml(cover) + '" alt="歌曲封面" style="width:52px;height:52px;min-width:52px;max-width:52px;display:block;object-fit:cover;border-radius:9px;background:#eee;" onerror="this.onerror=null;this.src=window.__akiniDefaultCover||this.src"/>'
@@ -571,10 +572,16 @@
         '" onclick="event.stopPropagation();window.__akiniOpenMusicRecommendCard &amp;&amp; window.__akiniOpenMusicRecommendCard(this)" style="box-sizing:border-box !important;width:236px !important;min-width:236px !important;max-width:236px !important;height:76px !important;min-height:76px !important;max-height:76px !important;overflow:hidden !important;display:flex !important;align-items:center !important;gap:12px !important;background:#fff !important;border:1px solid #e8e8e8 !important;border-radius:16px !important;padding:11px 12px !important;cursor:pointer;color:#1a1a1a !important;box-shadow:0 4px 14px rgba(0,0,0,.07) !important;text-shadow:none !important;">' +
         coverHtml +
         '<div style="flex:1;min-width:0;width:0;overflow:hidden;">' +
-        '<div style="font-size:12px;color:#888;line-height:18px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">对方推了一首歌</div>' +
-        '<div title="' + escapeCardHtml(title) + '" style="font-size:14px;font-weight:600;color:#1a1a1a;line-height:20px;margin-top:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' +
+        '<div style="font-size:11px;color:#888;line-height:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">对方推了一首歌</div>' +
+        '<div title="' + escapeCardHtml(title) + '" style="font-size:14px;font-weight:600;color:#1a1a1a;line-height:18px;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' +
         escapeCardHtml(title) +
-        "</div></div></div>";
+        "</div>" +
+        '<div title="' + escapeCardHtml(artist) + '" style="font-size:11px;color:#999;line-height:15px;margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' +
+        escapeCardHtml(artist) +
+        "</div></div>" +
+        '<div class="music-recommend-play" style="flex-shrink:0;width:22px;height:22px;display:flex;align-items:center;justify-content:center;">' +
+        '<svg width="22" height="22" viewBox="0 0 24 24" fill="#1a1a1a" aria-hidden="true" style="display:block;"><path d="M8 5v14l11-7z"/></svg>' +
+        "</div></div>";
       var taName = ta.name || "TA";
       var html =
         '<div class="msg-row other" data-ts="' + __akiniNextTs() + '">' +
