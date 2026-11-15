@@ -617,6 +617,8 @@
         var ts = r.getAttribute("data-ts");
         if (!ts) return;
         if (r.classList.contains("system")) return;
+        /* 联系人消息不再随机触发小气泡 */
+        if (r.classList.contains("other") || r.classList.contains("ta")) return;
         var b = r.querySelector(".bubble");
         if (!b) return;
         /* 只有转账/问卷/商店/音乐卡片不参与小气泡；表情包/图片/视频/语音允许 */
@@ -687,111 +689,6 @@
     apply(row, mp);
     return true;
   }
-
-  function openPicker(row) {
-    if (!row) return;
-    var id = curCid();
-    if (!id) {
-      window.__akiniToast && window.__akiniToast("请先进入聊天");
-      return;
-    }
-    var old = document.getElementById("akiniMbPicker");
-    if (old) old.remove();
-    var ts = row.getAttribute("data-ts");
-    var cur = "";
-    try {
-      cur = cidMap(mapAll(), id)[ts] || "";
-    } catch (e) {}
-
-    var wrap = document.createElement("div");
-    wrap.id = "akiniMbPicker";
-    wrap.style.cssText =
-      "position:fixed;inset:0;z-index:9300;background:rgba(0,0,0,.45);display:flex;align-items:flex-end;justify-content:center;";
-    var inner = document.createElement("div");
-    inner.style.cssText =
-      "width:100%;max-width:480px;background:#fff;border-radius:20px 20px 0 0;padding:16px 16px calc(16px + env(safe-area-inset-bottom,0px));display:flex;flex-direction:column;gap:12px;box-sizing:border-box;";
-    var head = document.createElement("div");
-    head.style.cssText = "display:flex;align-items:center;justify-content:space-between;flex-shrink:0;";
-    var title = document.createElement("div");
-    title.style.cssText = "font-size:16px;font-weight:700;color:#1a1a1a";
-    title.textContent = "添加小气泡";
-    var close = document.createElement("button");
-    close.type = "button";
-    close.textContent = "✕";
-    close.style.cssText = "border:none;background:none;font-size:20px;color:#999;cursor:pointer;padding:0 4px;";
-    close.addEventListener("click", function () {
-      wrap.remove();
-    });
-    head.appendChild(title);
-    head.appendChild(close);
-
-    var input = document.createElement("input");
-    input.type = "text";
-    input.maxLength = 20;
-    input.placeholder = "输入小气泡内容…";
-    input.value = cur || "";
-    input.style.cssText =
-      "width:100%;box-sizing:border-box;padding:12px 14px;border-radius:13px;border:1.5px solid #000;background:#fff;color:#000;font-size:15px;outline:none;";
-
-    var tip = document.createElement("div");
-    tip.style.cssText = "font-size:11px;color:#999;flex-shrink:0;line-height:1.5;";
-    tip.textContent = "自己输入的小气泡只在这条消息上显示；联系人会从字卡库「小气泡」随机抽内容";
-
-    var confirmBtn = document.createElement("button");
-    confirmBtn.type = "button";
-    confirmBtn.textContent = "确定";
-    confirmBtn.style.cssText =
-      "width:100%;padding:12px;border-radius:13px;border:none;background:#1a1a1a;color:#fff;font-size:15px;font-weight:600;cursor:pointer;flex-shrink:0;";
-    function doConfirm() {
-      var t = input.value;
-      if (!t || !t.trim()) {
-        input.focus();
-        return;
-      }
-      if (setFor(row, t)) {
-        wrap.remove();
-        window.__akiniToast && window.__akiniToast("✓ 已添加小气泡");
-      }
-    }
-    confirmBtn.addEventListener("click", doConfirm);
-    input.addEventListener("keydown", function (e) {
-      if (e.key === "Enter") {
-        e.preventDefault();
-        doConfirm();
-      }
-    });
-
-    inner.appendChild(head);
-    inner.appendChild(input);
-    inner.appendChild(tip);
-
-    if (cur) {
-      var rm = document.createElement("button");
-      rm.type = "button";
-      rm.textContent = "移除当前小气泡";
-      rm.style.cssText =
-        "width:100%;padding:11px;border-radius:13px;border:1.5px solid #f0c4c4;background:#fff5f5;color:#c0392b;font-size:13px;font-weight:600;cursor:pointer;flex-shrink:0;";
-      rm.addEventListener("click", function () {
-        setFor(row, "");
-        wrap.remove();
-        window.__akiniToast && window.__akiniToast("已移除小气泡");
-      });
-      inner.appendChild(rm);
-    }
-
-    inner.appendChild(confirmBtn);
-    wrap.appendChild(inner);
-    wrap.addEventListener("click", function (e) {
-      if (e.target === wrap) wrap.remove();
-    });
-    document.body.appendChild(wrap);
-    setTimeout(function () {
-      try {
-        input.focus();
-      } catch (e) {}
-    }, 80);
-  }
-  window.__akiniOpenMiniBubblePicker = openPicker;
 
   function boot() {
     var body = document.getElementById("chatBody");

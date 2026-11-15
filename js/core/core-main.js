@@ -15411,7 +15411,7 @@ Vi = document.getElementById("transferBtn"),
           function a(e, a) {
             if (!e || !a) return;
             ((n = a), (i = e), (window.__akiniMbCtxRow = a), (t.style.display = "block"));
-            /* 陪伴 / 观影聊天只保留 复制 / 引用 / 小气泡 / 删除，收藏不可用 */
+            /* 陪伴 / 观影聊天只保留 复制 / 引用 / 删除，收藏不可用 */
             try {
               var _cw = !!(a.closest && a.closest("#companionMsgs,#watchChatBody")),
                 _fav = document.getElementById("ctxFav");
@@ -15685,11 +15685,6 @@ Vi = document.getElementById("transferBtn"),
                 });
               });
             })(),
-            document.getElementById("ctxMiniBubble") &&
-              document.getElementById("ctxMiniBubble").addEventListener("click", function () {
-                var t = window.__akiniMbCtxRow;
-                (o(), window.__akiniOpenMiniBubblePicker && window.__akiniOpenMiniBubblePicker(t));
-              }),
             document.getElementById("ctxFav").addEventListener("click", function () {
               (o(), window.__akiniEnterFavSelectMode && window.__akiniEnterFavSelectMode());
             }),
