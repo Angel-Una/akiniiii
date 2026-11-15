@@ -146,7 +146,7 @@ html.ios-lite .top-card {
    用双写 .msg-row.system 提特异性，压过 akini-perf-lite.css 里的 max-width:70%，
    否则 nowrap 文字会溢出 70% 宽的灰底气泡。 */
 html body #app-chat .chat-body .msg-row.system.msg-row.system .bubble-wrap { max-width:none !important; width:fit-content !important; }
-html body #app-chat .chat-body .msg-row.system.msg-row.system .bubble:not(.transfer-bubble):not(.sticker-bubble):not(.survey-bubble):not(.shop-card-bubble):not(.img-bubble):not(.video-bubble):not(.voice-bubble):not(.music-invite-bubble):not(.music-end-bubble) {
+html body #app-chat .chat-body .msg-row.system.msg-row.system .bubble:not(.transfer-bubble):not(.sticker-bubble):not(.survey-bubble):not(.shop-card-bubble):not(.img-bubble):not(.video-bubble):not(.voice-bubble):not(.music-invite-bubble):not(.music-end-bubble):not(.music-recommend-bubble) {
   white-space:nowrap !important;
   max-width:none !important;
   width:auto !important;
