@@ -550,7 +550,7 @@ window.__akiniDefer2(function () {
         window.__akiniCardTriggering = true;
         try {
           if (
-            Math.random() < 0.05 &&
+            Math.random() < (AKR ? AKR.getProb("musicRecommend") : 0.05) &&
             window.__akiniSendMusicRecommendCard &&
             window.__akiniSendMusicRecommendCard(chatId)
           )

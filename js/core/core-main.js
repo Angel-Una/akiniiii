@@ -272,6 +272,7 @@
       refundTransfer: 0.2,
       poke: 0.03,
       pinyinCard: 0.3,
+      musicRecommend: 0.05,
       emojiMixMsg: 0.2,
       replySticker: 0.2,
       postWithSticker: 0.1,

@@ -1043,6 +1043,7 @@
     shopCard: "akini_prob_shopCard",
     musicInvite: "akini_prob_invite",
     musicSkip: "akini_prob_skip",
+    musicRecommend: "akini_prob_musicRecommend",
     taPhoneChat: "akini_prob_taPhoneChat",
     taPhoneMoments: "akini_prob_taPhoneMoments",
     taPhoneIcity: "akini_prob_taPhoneIcity",
@@ -1074,6 +1075,7 @@
     shopCard: 10,
     musicInvite: 10,
     musicSkip: 5,
+    musicRecommend: 5,
     taPhoneChat: 2,
     taPhoneMoments: 10,
     taPhoneIcity: 10,
@@ -1270,6 +1272,7 @@
     bindProbInput("probNoReply", "noReply");
     bindProbInput("probMusicInvite", "musicInvite");
     bindProbInput("probMusicSkip", "musicSkip");
+    bindProbInput("probMusicRecommend", "musicRecommend");
     bindProbInput("probIncomingCall", "incomingCall");
     bindProbInput("probCollectTransfer", "collectTransfer");
     bindProbInput("probMeaningfulNumber", "meaningfulNumber");
