@@ -7395,7 +7395,8 @@ body:not(.bubble-css-on) #app-chat .chat-body .msg-row .bubble::after {
   border: none !important;
   outline: 0 !important;
   background: 0 0 !important;
-  font-size: 15px !important;
+  /* 16px 是 iOS 触发输入框自动放大的分界线，小于它点输入框会整页放大上移 */
+  font-size: 16px !important;
   color: #1a1a1a !important;
   padding: 0 !important;
   margin: 0 !important;

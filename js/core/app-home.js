@@ -1144,18 +1144,24 @@ function syncDualScreensData() {
   function apply() {
     raf = 0;
     try {
-      var top = Math.max(0, Math.round(vv.offsetTop || 0)),
-        height = Math.round(vv.height || window.innerHeight),
-        kb = Math.round(window.innerHeight - vv.height - (vv.offsetTop || 0));
-      if (kb < 80) {
+      /* iOS 弹出键盘时 innerHeight 会跟着可视区一起变小，必须用不会随键盘变化的
+         布局视口高度来判断，否则算不出键盘高度，页面就会被浏览器整体推上去。 */
+      var layoutH = document.documentElement.clientHeight || window.innerHeight;
+      var viewH = Math.round(vv.height || 0);
+      var offset = Math.max(0, Math.round(vv.offsetTop || 0));
+      var scale = vv.scale || 1;
+      var ae = document.activeElement;
+      var editing = !!ae && (ae.tagName === "INPUT" || ae.tagName === "TEXTAREA" || ae.isContentEditable);
+      var shrunk = layoutH - viewH >= 80;
+      if (scale > 1.05 || (!shrunk && !(editing && offset >= 80))) {
         root.style.removeProperty("--akini-vv-top");
         root.style.removeProperty("--akini-vv-h");
         root.style.setProperty("--akini-kb", "0px");
         return;
       }
-      root.style.setProperty("--akini-vv-top", top + "px");
-      root.style.setProperty("--akini-vv-h", height + "px");
-      root.style.setProperty("--akini-kb", kb + "px");
+      root.style.setProperty("--akini-vv-top", offset + "px");
+      root.style.setProperty("--akini-vv-h", viewH + "px");
+      root.style.setProperty("--akini-kb", Math.max(0, layoutH - viewH - offset) + "px");
       if (window.scrollY) window.scrollTo(0, 0);
     } catch (e) {}
   }
