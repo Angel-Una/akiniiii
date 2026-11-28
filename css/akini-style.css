@@ -10629,6 +10629,10 @@ html body .chat-body .msg-row.ta .msg-content-line > .bubble-wrap {
   width: 150px;
   padding: 8px 8px 24px 8px;
   transform: rotate(-3.5deg);
+  /* 与右侧图标区顶部对齐：父容器 .s1-bottom-fig3 为 align-items:flex-end，
+     自定义功能图标会把图标撑大、图标区变高，底部对齐会把拍立得整体顶下去；
+     固定为顶部对齐后，拍立得位置不再随图标区高度变化而下移 */
+  align-self: flex-start;
 }
 .s1-apps-pure {
   display: flex;
