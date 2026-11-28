@@ -11250,3 +11250,28 @@ html body .beautify-area {
   background: #e8e8e8 !important;
   color: #000 !important;
 }
+
+/* ===== 面板/页面打开淡入：对齐参考项目的顺滑打开效果。
+   仅用 opacity，不用 transform，避免影响浮层内部 fixed/absolute 子元素定位。
+   浮层从 display:none 切到显示(.show)时，该动画自动播放一次，无需改 JS。 */
+@keyframes akiniLayerFadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+#settingsArea.show,
+#beautifyArea.show,
+#wordbankOverlay.show,
+#icityArea.show,
+#storageArea.show,
+#app-friends.show,
+#app-mail.show,
+#app-shop.show,
+#app-novel.show,
+#app-companion.show,
+#app-music.show {
+  animation: akiniLayerFadeIn 0.22s ease-out;
+}
