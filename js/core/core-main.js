@@ -1517,52 +1517,53 @@ function j(t, e, n, i) {
             var m = 1500 + 2500 * Math.random(),
               u = Math.max(500, Math.round(1e3 * d));
             "number" == typeof n && n > 0 && (u = n);
-            var g = o.memberId || null;
-            if (
-              ((o.readTimer = setTimeout(function () {
-                o.readTimer = null;
-                try {
-                  !(function () {
-                    var t = document.getElementById("chatBody");
-                    if (t) {
-                      t.querySelectorAll(".msg-row.me[data-read-pending]").forEach(function (t) {
-                        try {
-                          f(t);
-                        } catch (t) {}
-                      });
-                      try {
-                        t.querySelectorAll(".msg-row.me").forEach(function (t) {
-                          if ("1" !== t.getAttribute("data-had-read-receipt"))
-                            try {
-                              (t.setAttribute("data-read-pending", "1"), f(t));
-                            } catch (t) {}
-                        });
-                      } catch (t) {}
-                    }
-                  })();
-                } catch (t) {}
-                if ("none" !== r.type);
-                else {
-                  try {
-                    z(t);
-                  } catch (t) {}
-                  try {
-                    window.akiniContacts.getSession(t) &&
-                      window.akiniContacts.updateSession(t, {
-                        unread: 0,
-                      });
-                  } catch (t) {}
-                  try {
-                    var e = document.getElementById("readReceiptToggle");
-                    (e && !e.classList.contains("on")) || !window.__akiniMarkLastRead || window.__akiniMarkLastRead(t);
-                  } catch (t) {}
-                }
-              }, m)),
-              "none" !== r.type)
-            ) {
+            var g = o.memberId || null,
+              _deliverAt = Math.max(u, m + 800);
+            /* 时序：消息发出后先等一会儿把消息标记「已读」，已读之后再出现
+               「对方正在输入」，最后按回复延迟把消息投递过来。 */
+            o.readTimer = setTimeout(function () {
+              o.readTimer = null;
               try {
-                t === window.akiniContacts.getActiveChatId() && !document.hidden && O(t, g);
+                !(function () {
+                  var t = document.getElementById("chatBody");
+                  if (t) {
+                    t.querySelectorAll(".msg-row.me[data-read-pending]").forEach(function (t) {
+                      try {
+                        f(t);
+                      } catch (t) {}
+                    });
+                    try {
+                      t.querySelectorAll(".msg-row.me").forEach(function (t) {
+                        if ("1" !== t.getAttribute("data-had-read-receipt"))
+                          try {
+                            (t.setAttribute("data-read-pending", "1"), f(t));
+                          } catch (t) {}
+                      });
+                    } catch (t) {}
+                  }
+                })();
               } catch (t) {}
+              if ("none" !== r.type) {
+                try {
+                  t === window.akiniContacts.getActiveChatId() && !document.hidden && O(t, g);
+                } catch (t) {}
+              } else {
+                try {
+                  z(t);
+                } catch (t) {}
+                try {
+                  window.akiniContacts.getSession(t) &&
+                    window.akiniContacts.updateSession(t, {
+                      unread: 0,
+                    });
+                } catch (t) {}
+                try {
+                  var e = document.getElementById("readReceiptToggle");
+                  (e && !e.classList.contains("on")) || !window.__akiniMarkLastRead || window.__akiniMarkLastRead(t);
+                } catch (t) {}
+              }
+            }, m);
+            if ("none" !== r.type) {
               o.timer = setTimeout(function () {
                 o.timer = null;
                 try {
@@ -1574,12 +1575,12 @@ function j(t, e, n, i) {
                     window.__akiniReportErr && window.__akiniReportErr("回复-定时器", e),
                     z(t));
                 }
-              }, u);
+              }, _deliverAt);
               try {
                 var p = (window.__akiniPendingReplyMap || {})[t];
                 p && (p.settling = !0);
               } catch (t) {}
-              o.dueAt = Date.now() + u;
+              o.dueAt = Date.now() + _deliverAt;
             }
           }
         }
@@ -9613,17 +9614,10 @@ window.__akiniCleanGhostBubbles = function (root) {
               (o > 0 || (o = 3), r >= o || (r = Math.max(o, 5)));
               var c = 1e3 * (i + Math.random() * (a - i)),
                 s = null,
-                _frCid = t;
-              /* 输入动态立即显示（不等已读模拟）：与正常发消息路径一致，
-                 一发消息就看到「对方正在输入」，已读回执稍后再出现。 */
-              try {
-                window.akiniContacts &&
-                  window.akiniContacts.getActiveChatId &&
-                  window.akiniContacts.getActiveChatId() === _frCid &&
-                  !document.hidden &&
-                  !replyRoundBusy(_frCid) &&
-                  O(_frCid, s);
-              } catch (t) {}
+                _frCid = t,
+                _deliverAt = Math.max(c, n + 800);
+              /* 时序：先过一会儿模拟「已读」，已读之后再出现「对方正在输入」，
+                 最后按回复延迟把消息投递过来（与主动消息/正常回复同一套节奏）。 */
               return (
                 setTimeout(function () {
                   try {
@@ -9636,6 +9630,14 @@ window.__akiniCleanGhostBubbles = function (root) {
                           } catch (t) {}
                       });
                   } catch (t) {}
+                  try {
+                    window.akiniContacts &&
+                      window.akiniContacts.getActiveChatId &&
+                      window.akiniContacts.getActiveChatId() === _frCid &&
+                      !document.hidden &&
+                      !replyRoundBusy(_frCid) &&
+                      O(_frCid, s);
+                  } catch (t) {}
                 }, n),
                 void setTimeout(function () {
                   window.__akiniForceReplyInFlight = !1;
@@ -9643,7 +9645,7 @@ window.__akiniCleanGhostBubbles = function (root) {
                   try {
                     window.I(t, e, null, !0);
                   } catch (t) {}
-                }, c)
+                }, _deliverAt)
               );
             }
             J(window.akiniContacts ? window.akiniContacts.getActiveChatId() : null);
@@ -20307,22 +20309,43 @@ window.__akiniPatchAvatarCell = function (t, e) {
             r = parseFloat(localStorage.getItem("akini_num_replyDelayMax") || "7");
           (o > 0 || (o = 3), r >= o || (r = Math.max(o, 7)));
           var c = Math.max(600 + 900 * Math.random(), 1e3 * (o + Math.random() * (r - o)));
-          ("number" == typeof e && e > 0 && (c = Math.max(c, e)),
-            i && O(t, null),
-            window._akiniTimer.schedule("activeMsgReply", function () {
-              if (replyRoundBusy(t)) return;
-              if (
-                window.__akiniHasReplyPool &&
-                !window.__akiniHasReplyPool(n.id || t)
-              ) {
-                R(t);
-                window.__akiniNotifyEmptyReply && window.__akiniNotifyEmptyReply();
-                return;
+          "number" == typeof e && e > 0 && (c = Math.max(c, e));
+          /* 时序：先过一会儿模拟「已读」，已读之后再出现「对方正在输入」，
+             最后按回复延迟把消息投递过来。 */
+          var m = 1500 + 2500 * Math.random(),
+            _readAt = Math.max(600, Math.min(m, c * 0.6)),
+            _deliverAt = Math.max(c, _readAt + 800);
+          setTimeout(function () {
+            try {
+              if (i) {
+                var cb = document.getElementById("chatBody");
+                cb &&
+                  cb.querySelectorAll(".msg-row.me").forEach(function (row) {
+                    if ("1" !== row.getAttribute("data-had-read-receipt"))
+                      try {
+                        (row.setAttribute("data-read-pending", "1"), f(row));
+                      } catch (t) {}
+                  });
               }
-              var l = P();
-              if (!l || "none" === l.type) return void R(t);
-              window.I(t, n, l, !0);
-            }, c));
+            } catch (t) {}
+            try {
+              i && !document.hidden && O(t, null);
+            } catch (t) {}
+          }, _readAt);
+          window._akiniTimer.schedule("activeMsgReply", function () {
+            if (replyRoundBusy(t)) return;
+            if (
+              window.__akiniHasReplyPool &&
+              !window.__akiniHasReplyPool(n.id || t)
+            ) {
+              R(t);
+              window.__akiniNotifyEmptyReply && window.__akiniNotifyEmptyReply();
+              return;
+            }
+            var l = P();
+            if (!l || "none" === l.type) return void R(t);
+            window.I(t, n, l, !0);
+          }, _deliverAt);
         }),
         (window.getContactStickersSync = function (t) {
           var e = "akini_stickers_" + t;
