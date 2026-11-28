@@ -1116,7 +1116,7 @@
 <script src="js/core/core-utils.js?v=20261115b"></script>
 <script src="js/core/core-boot.js?v=20261113a"></script>
 <script src="js/core/core-helpers.js?v=20261113a"></script>
-<script src="js/core/core-main.js?v=20261127b"></script>
+<script src="js/core/core-main.js?v=20261128a"></script>
 <script src="js/core/app-boot.js?v=20261127b"></script>
 <script src="js/core/app-sticker.js?v=20261113a"></script>
 <script src="js/core/app-notice.js?v=20261113a"></script>
@@ -1136,6 +1136,9 @@
 <script src="js/core/runtime.js?v=20261115c"></script>
 <script src="js/features/home-fit.js?v=20261113a" id="home-fit-module"></script>
 <script src="js/storage/restore.js?v=20261113a"></script>
+<!-- chat-engine 首屏同步加载：定义 __akiniHasReplyPool 并接管 pickWordCards。
+     放 A 组避免 requestIdleCallback 懒加载失败，导致主动消息/回复链路失效 -->
+<script src="js/features/chat-engine.js?v=20261128a"></script>
 
 <!-- B 组：window load 之后按原顺序逐个注入，不阻塞首屏 -->
 <script>
@@ -1159,7 +1162,6 @@
     ["js/features/music-menu-lock.js?v=20261113a", "akini-music-menu-scroll-lock"],
     ["js/features/chat-top-blur.js?v=20261113a", "akini-top-blur"],
     ["js/core/r6.js?v=20261127a"],
-    ["js/features/chat-engine.js?v=20261117c"],
     ["js/features/avatar-swap.js?v=20261113a"],
     ["js/features/ticket.js?v=20261113a"],
     ["js/features/music-mini.js?v=20261113a"],

@@ -9614,6 +9614,16 @@ window.__akiniCleanGhostBubbles = function (root) {
               var c = 1e3 * (i + Math.random() * (a - i)),
                 s = null,
                 _frCid = t;
+              /* 输入动态立即显示（不等已读模拟）：与正常发消息路径一致，
+                 一发消息就看到「对方正在输入」，已读回执稍后再出现。 */
+              try {
+                window.akiniContacts &&
+                  window.akiniContacts.getActiveChatId &&
+                  window.akiniContacts.getActiveChatId() === _frCid &&
+                  !document.hidden &&
+                  !replyRoundBusy(_frCid) &&
+                  O(_frCid, s);
+              } catch (t) {}
               return (
                 setTimeout(function () {
                   try {
@@ -9625,15 +9635,6 @@ window.__akiniCleanGhostBubbles = function (root) {
                             (t.setAttribute("data-read-pending", "1"), f(t));
                           } catch (t) {}
                       });
-                  } catch (t) {}
-                  // 已读后出现输入动态
-                  try {
-                    window.akiniContacts &&
-                      window.akiniContacts.getActiveChatId &&
-                      window.akiniContacts.getActiveChatId() === _frCid &&
-                      !document.hidden &&
-                      !replyRoundBusy(_frCid) &&
-                      O(_frCid, s);
                   } catch (t) {}
                 }, n),
                 void setTimeout(function () {
