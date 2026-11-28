@@ -6936,7 +6936,7 @@ function En(t) {
             _pr = _swp ? s : l;
           const h = document.getElementById("callAvatar"),
             v = document.getElementById("callName");
-          (!h || (window._callState && window._callState.active) || (h.innerHTML = c),
+          (!h || (window._callState && window._callState.active) || (__akiniPatchAvatarCell(h, c)),
             !v || (window._callState && window._callState.active) || (v.textContent = r));
           const k = document.getElementById("inputTaName"),
             b = document.getElementById("inputMyName");
@@ -6944,7 +6944,7 @@ function En(t) {
           const S = document.getElementById("inputMyNameBeautify");
           S && !S.dataset.userEdited && (S.value = e);
           const I = document.getElementById("myAvatarPreviewBeautify");
-          (I && (I.innerHTML = a),
+          (I && __akiniPatchAvatarCell(I, a),
             (function () {
               try {
                 (window.akiniContacts &&
@@ -6965,12 +6965,12 @@ function En(t) {
             })());
           const x = document.getElementById("callAvatarFull"),
             C = document.getElementById("callNameFull");
-          (!x || (window._callState && window._callState.active) || (x.innerHTML = c),
+          (!x || (window._callState && window._callState.active) || (__akiniPatchAvatarCell(x, c)),
             !C || (window._callState && window._callState.active) || (C.textContent = r));
           const A = document.getElementById("chatTaAvatar");
           A &&
             (c && c.trim()
-              ? ((A.style.visibility = ""), A.innerHTML !== c && (A.innerHTML = c))
+              ? ((A.style.visibility = ""), __akiniPatchAvatarCell(A, c))
               : (A.innerHTML && A.innerHTML.trim()) || ((A.style.visibility = "hidden"), (A.innerHTML = "")));
           const T = document.getElementById("s1AvatarImg");
           if (T && (i || (p && p.avatar))) {
@@ -6991,9 +6991,9 @@ function En(t) {
           const R = document.getElementById("friendsProfileName");
           R && (R.textContent = e);
           const H = document.getElementById("myMsgAvatar");
-          H && (H.innerHTML = a);
+          H && __akiniPatchAvatarCell(H, a);
           const F = document.getElementById("taMsgAvatar");
-          (F && (F.innerHTML = c), window.renderHomeAvatarPreviews && window.renderHomeAvatarPreviews());
+          (F && __akiniPatchAvatarCell(F, c), window.renderHomeAvatarPreviews && window.renderHomeAvatarPreviews());
           const z = document.getElementById("chatBody");
           var j;
           (z &&
@@ -7007,19 +7007,13 @@ function En(t) {
             ["icityMyAvatar2", "icityMyAvatar3", "icityEditMyAvatarPreview"].forEach(function (t) {
               var e = document.getElementById(t);
               if (e) {
-                var n = e.querySelector('input[type="file"]');
-                (n && n.remove(),
-                  0 === a.indexOf("<img") ? (e.innerHTML = a) : (e.textContent = a),
-                  n && e.appendChild(n));
+                0 === a.indexOf("<img") ? setHtmlKeepInput(e, a) : (e.textContent = a);
               }
             }),
             ["icityTaAvatar3", "icityEditTaAvatarPreview"].forEach(function (t) {
               var e = document.getElementById(t);
               if (e) {
-                var n = e.querySelector('input[type="file"]');
-                (n && n.remove(),
-                  0 === c.indexOf("<img") ? (e.innerHTML = c) : (e.textContent = c),
-                  n && e.appendChild(n));
+                0 === c.indexOf("<img") ? setHtmlKeepInput(e, c) : (e.textContent = c);
               }
             }),
             (j = function (t) {
@@ -7061,9 +7055,9 @@ function En(t) {
             "function" == typeof Xt && Xt(),
             "function" == typeof window._akiniApplyPreview && window._akiniApplyPreview());
           const q = document.getElementById("settingsMyAvatar");
-          q && (q.innerHTML = a);
+          q && __akiniPatchAvatarCell(q, a);
           const J = document.getElementById("settingsTaAvatar");
-          (J && (J.innerHTML = c),
+          (J && __akiniPatchAvatarCell(J, c),
             "function" == typeof window.syncAvatars && window.syncAvatars(t),
             (window.__akiniSyncingAvatars = !1),
             window.__akiniAvatarNeedsRefresh && ((window.__akiniAvatarNeedsRefresh = !1), En()));

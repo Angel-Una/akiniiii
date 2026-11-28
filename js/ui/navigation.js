@@ -564,6 +564,67 @@ if (window.__navBack) {
     bindAppButtons();
   }
 
+  /* ===== 主导航快速点击：消除移动端 click 的 ~300ms 延迟，让点击跟手。
+     首页/第二屏功能图标与底部 dock 都是纯导航按钮（只跳 navTo），
+     用 touchend 立即触发并 preventDefault 阻止后续 click，避免重复跳转；
+     桌面无 touch 时仍走原有 click/内联 onclick 兜底。带滚动位移防误触。 */
+  (function () {
+    function fastTap(el, app) {
+      if (!el || !app || el.__akiniFastTap) return;
+      el.__akiniFastTap = true;
+      el.style.touchAction = "manipulation";
+      var sx = 0,
+        sy = 0,
+        moved = false;
+      el.addEventListener(
+        "touchstart",
+        function (e) {
+          moved = false;
+          var t = e.touches && e.touches[0];
+          if (t) {
+            sx = t.clientX;
+            sy = t.clientY;
+          }
+        },
+        { passive: true },
+      );
+      el.addEventListener(
+        "touchmove",
+        function (e) {
+          var t = e.touches && e.touches[0];
+          if (t && (Math.abs(t.clientX - sx) > 12 || Math.abs(t.clientY - sy) > 12)) moved = true;
+        },
+        { passive: true },
+      );
+      el.addEventListener(
+        "touchend",
+        function (e) {
+          if (moved) {
+            moved = false;
+            return;
+          }
+          if (!window.navTo) return;
+          // 阻止后续 300ms 的 click，防止 navTo 被触发两次
+          e.preventDefault();
+          window.navTo(app);
+        },
+        { passive: false },
+      );
+    }
+    function bindFastTap() {
+      try {
+        Object.keys(map).forEach(function (id) {
+          fastTap(document.getElementById(id), map[id]);
+        });
+        document.querySelectorAll(".app-item[data-app]").forEach(function (el) {
+          fastTap(el, el.getAttribute("data-app"));
+        });
+      } catch (e) {}
+    }
+    if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", bindFastTap);
+    else bindFastTap();
+  })();
+
   /* ===== 微信/浏览器返回键统一关闭网易云一起听浮层 ===== */
   (function () {
     var MUSIC_OVERLAYS = [
