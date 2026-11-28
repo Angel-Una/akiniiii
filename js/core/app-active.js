@@ -21,9 +21,15 @@
 
   var msgTimer = null;
 
+  /* 直接读存储，绕开 __akiniToggleOn 的「必须已有活跃联系人」限制：
+     启动早期联系人还没水合时，那个限制会把开关误判成关闭、并清掉已保存的排期。 */
   function _toggleOn() {
-    if (!window.__akiniToggleOn) return false;
-    return !!window.__akiniToggleOn("contactActiveMsgToggle", false);
+    try {
+      var v = localStorage.getItem("akini_toggle_contactActiveMsgToggle");
+      return null == v ? false : "1" === v;
+    } catch (e) {
+      return false;
+    }
   }
 
   /* 用户设置的最小~最大分钟数之间随机取一个间隔 */
@@ -51,14 +57,21 @@
     return null;
   }
 
-  /* 一次主动发消息：标记已读 + 连发 1~3 条（内容取自字卡库） */
+  /* 一次主动发消息：标记已读 + 连发 1~3 条（内容取自字卡库）。
+     有概率转为「主动来电」，由 core 暴露的钩子处理。 */
   function _fire() {
     var c = _defaultContact();
-    if (!c) return;
+    if (!c) return false;
     try {
       localStorage.removeItem("akini_active_msg_next");
     } catch (e) {}
-    window.triggerTaReplyOnce(c.id);
+    try {
+      if (window.__akiniMaybeActiveCall && window.__akiniMaybeActiveCall(c.id)) return true;
+    } catch (e) {}
+    try {
+      window.triggerTaReplyOnce(c.id);
+    } catch (e) {}
+    return true;
   }
 
   function _arm(delay) {
@@ -105,8 +118,8 @@
     try {
       next = parseInt(localStorage.getItem("akini_active_msg_next") || "0", 10) || 0;
     } catch (e) {}
-    if (fromForeground && next > 0 && Date.now() < next) {
-      /* 没过点：按剩余时间补齐定时器（页面重载后 msgTimer 必然为空，也需要重建） */
+    /* 只要还没到点就按剩余时间续上——刷新/回前台都不会把排期重置成新的随机间隔 */
+    if (next > 0 && Date.now() < next) {
       _arm(next - Date.now());
       return;
     }
@@ -114,6 +127,8 @@
       try {
         _fire();
       } catch (e) {}
+    /* 联系人还没恢复出来时先不排期，等水合完成后的重试再排，避免空跑 */
+    if (!_defaultContact()) return;
     _arm(_randomIntervalMs());
   }
 
@@ -170,15 +185,25 @@
       }
     }, 200);
   }
-  /* 存储水合完成后（真实开关值才可见）再排一次，避免启动早期读到默认值 */
+  /* 存储水合 + 联系人就绪之后再排一次；最多等 20 秒兜底 */
   var _planRetry = 0;
   var _planIv = setInterval(function () {
     _planRetry += 500;
-    if (window.__akiniStorageRestored || _planRetry > 12000) {
+    var restored = !!(window.__akiniStorageRestored || window.__akiniRestoreSettled);
+    var hasContact = false;
+    try {
+      hasContact = !!(window.akiniContacts && window.akiniContacts.getContacts && window.akiniContacts.getContacts().length);
+    } catch (e) {}
+    if ((restored && hasContact) || _planRetry > 20000) {
       clearInterval(_planIv);
-      manage();
+      manage(true);
     }
   }, 500);
+  window.addEventListener("akini-storage-restored", function () {
+    setTimeout(function () {
+      manage(true);
+    }, 300);
+  });
   /* core 启动排期的延后触发点在启动后 1.5s/4s/9s 兜底清理即可；
      启动完成后旧定时器不会复活，删除 10s 常驻轮询（回前台时由 visibilitychange 再清一次）。 */
   [1500, 4000, 9000].forEach(function (ms) {

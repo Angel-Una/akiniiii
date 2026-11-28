@@ -20399,55 +20399,25 @@ window.__akiniPatchAvatarCell = function (t, e) {
             } catch (t) {}
           return "";
         }),
-        (function t(e) {
-          if (
-            (window.__activeMsgTimer && (clearTimeout(window.__activeMsgTimer), (window.__activeMsgTimer = null)),
-            !window.__akiniToggleOn || !window.__akiniToggleOn("contactActiveMsgToggle", !1))
-          )
-            return;
-          var n = 60 * parseFloat(localStorage.getItem("akini_num_activeMsgMin") || "5") * 1e3,
-            i = 60 * parseFloat(localStorage.getItem("akini_num_activeMsgMax") || "10") * 1e3,
-            a = e ? n : n + Math.random() * Math.max(0, i - n);
-          function o() {
-            try {
-              if (!Ai.active) {
-                if (!window.akiniContacts || "function" != typeof window.akiniContacts.getContacts) return void t(!1);
-                var e = (function () {
-                  var dc = window.__akiniDefaultContact && window.__akiniDefaultContact();
-                  return dc ? dc.id : null;
-                })();
-                if (!e) return void t(!1);
-                var n = window.akiniContacts.getChatTarget(e);
-                if (!window.__akiniToggleOn("contactActiveMsgToggle", !1)) return void t(!1);
-                if (
-                  Ye() ||
-                  (Ai && Ai.active) ||
-                  !(Math.random() < window.AKR.getProb("groupCall")) ||
-                  !n ||
-                  "group" === n.type
-                )
-                  "function" == typeof window.triggerTaReplyOnce && window.triggerTaReplyOnce(e);
-                else {
-                  var i = {
-                    targetId: e,
-                  };
-                  ((i.callerName = n.name), (i.callerAvatar = n.avatar), Ve(n.name, !1, i));
-                }
-              }
-              t(!1);
-            } catch (e) {
-              (console.warn("[__amt] error", e), t(!1));
-            }
+        /* 主动消息里「随机转为视频来电」的能力，由 core 闭包提供；
+           排期与触发统一交给 app-active.js，避免两套定时器互相覆盖。 */
+        (window.__akiniMaybeActiveCall = function (e) {
+          try {
+            if (Ai && Ai.active) return !1;
+            var n =
+              window.akiniContacts && window.akiniContacts.getChatTarget
+                ? window.akiniContacts.getChatTarget(e)
+                : null;
+            if (Ye() || (Ai && Ai.active) || !(Math.random() < window.AKR.getProb("groupCall")) || !n || "group" === n.type)
+              return !1;
+            var i = {
+              targetId: e,
+            };
+            return ((i.callerName = n.name), (i.callerAvatar = n.avatar), Ve(n.name, !1, i), !0);
+          } catch (t) {
+            return !1;
           }
-          (console.log("[Akini 主动发消息] 下次调度：", (a / 6e4).toFixed(1), "分钟后触发"),
-            (window._akiniActiveMsgAction = o),
-            (window._akiniRescheduleActiveMsg = function () {
-              t(!1);
-            }),
-            (window.__activeMsgTimer = setTimeout(function () {
-              ((window.__activeMsgTimer = null), o());
-            }, a)));
-        })(!0),
+        }),
         (function () {
           var t = !1,
             e = null;
